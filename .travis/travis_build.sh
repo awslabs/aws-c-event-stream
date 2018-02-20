@@ -21,14 +21,14 @@ cd ..
 git clone https://github.com/awslabs/aws-checksums.git
 mkdir checksums-build && cd checksums-build
 cmake ../aws-checksums
-make -j && make test
+make && make test
 cd ..
 
 #build aws-c-common
 git clone https://github.com/awslabs/aws-c-common.git
 mkdir common-build && cd common-build
 cmake ../aws-c-common
-make -j && make test
+make && make test
 cd ..
 
 #build aws-c-event-stream
@@ -36,5 +36,5 @@ cd $PROJECT_DIR
 cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../aws-c-common/include --force --error-exitcode=-1 ./
 cd ..
 mkdir build && cd build
-cmake -Daws-checkums_DIR="../checksums-build" -Daws-c-common_DIR="../common-build" $PROJECT_DIR
+cmake -Daws-checksums_DIR="../checksums-build" -Daws-c-common_DIR="../common-build" $PROJECT_DIR
 make && make test
