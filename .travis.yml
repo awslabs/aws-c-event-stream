@@ -19,14 +19,14 @@ install:
 #execute build
 script:
   #build checksums
-  - git clone git@github.com:awslabs/aws-checksums.git
+  - git clone https://github.com/awslabs/aws-checksums.git
   - mkdir checksums-build && cd checksums-build
   - cmake ../aws-checksums
   - make -j 12 && make test
   - cd ..
 
   #build aws-c-common
-  - git clone git@github.com:awslabs/aws-c-common.git
+  - git clone https://github.com/awslabs/aws-c-common.git
   - mkdir common-build && cd common-build
   - cmake ../aws-c-common
   - make -j 12 && make test
