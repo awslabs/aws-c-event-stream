@@ -15,7 +15,7 @@
 #include <aws/event-stream/event_stream.h>
 #include <aws/common/encoding.h>
 #include <stdlib.h>
-#include <inttypes.h>
+#include <stdio.h>
 
 static void *mem_acquire_malloc(struct aws_allocator *alloc, size_t size) {
     return malloc(size);
@@ -101,17 +101,6 @@ int main(void) {
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(&decoder, &alloc, on_payload_segment, on_prelude_received, on_header_received, on_error, NULL);
-
-/* apparently Visual C doesn't know not to warn us to use c11 features when we've explicitly said we're using C99, so turn the warning off for now. */
-#if defined(_MSC_VER )
-#pragma warning( push )
-#pragma warning( disable : 4996 )  
-#endif
-    /* reopen stdin for binary data. */
-    freopen(NULL, "rb", stdin);
-#if defined(_MSC_VER )
-#pragma warning( pop )
-#endif
 
     setvbuf(stdin, NULL, _IONBF, 0);
 
