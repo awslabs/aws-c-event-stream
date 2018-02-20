@@ -16,6 +16,8 @@
 #include <aws/event-stream/event_stream.h>
 #include <aws/common/encoding.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 static void *mem_acquire_malloc(struct aws_allocator *alloc, size_t size) {
     return malloc(size);
