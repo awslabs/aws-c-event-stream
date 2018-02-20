@@ -886,7 +886,6 @@ read_header_name(struct aws_event_stream_streaming_decoder *decoder, const uint8
 
 static int
 read_header_name_len(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
-    size_t current_pos = decoder->message_pos;
 
     decoder->current_header.header_name_len = *data;
     decoder->message_pos++;
