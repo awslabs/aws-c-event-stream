@@ -18,5 +18,5 @@ install:
 
 #execute build
 script:
-  - .travis/travis_build
+  - .travis/travis_build.sh
 
