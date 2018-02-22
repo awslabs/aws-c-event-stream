@@ -18,6 +18,7 @@
 #include <aws/common/encoding.h>
 
 #include <inttypes.h>
+#include <assert.h>
 
 #define LIB_NAME "libaws-c-event-stream"
 
@@ -68,7 +69,7 @@ uint32_t compute_headers_len(struct aws_array_list *headers) {
     for (size_t i = 0; i < headers_count; ++i) {
         struct aws_event_stream_header_value_pair *header;
 
-        aws_array_list_get_at_ptr(headers, (void **)&header, i);
+        aws_array_list_get_at_ptr(headers, (void **) &header, i);
 
         headers_len += sizeof(header->header_name_len) +
                        header->header_name_len + 1;
@@ -99,9 +100,9 @@ size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer, si
         struct aws_event_stream_header_value_pair *header;
 
         aws_array_list_get_at_ptr(headers, (void **) &header, i);
-        *buffer_alias = (uint8_t)header->header_name_len;
+        *buffer_alias = (uint8_t) header->header_name_len;
         buffer_alias++;
-        memcpy(buffer_alias, header->header_name, (size_t)header->header_name_len);
+        memcpy(buffer_alias, header->header_name, (size_t) header->header_name_len);
         buffer_alias += header->header_name_len;
         *buffer_alias = (uint8_t) header->header_value_type;
         buffer_alias++;
@@ -159,9 +160,9 @@ int get_headers_from_buffer(struct aws_array_list *headers,
         /* get the header info from the buffer, make sure to increment buffer offset. */
         header.header_name_len = *buffer;
         buffer += sizeof(uint8_t);
-        memcpy((void *)header.header_name, buffer, (size_t)header.header_name_len);
+        memcpy((void *) header.header_name, buffer, (size_t) header.header_name_len);
         buffer += header.header_name_len;
-        header.header_value_type = (aws_event_stream_header_value_type)*buffer;
+        header.header_value_type = (aws_event_stream_header_value_type) *buffer;
         buffer++;
 
         switch (header.header_value_type) {
@@ -208,7 +209,7 @@ int get_headers_from_buffer(struct aws_array_list *headers,
                 break;
         }
 
-        if(aws_array_list_push_back(headers, (const void *)&header)) {
+        if (aws_array_list_push_back(headers, (const void *) &header)) {
             return AWS_OP_ERR;
         }
     }
@@ -265,8 +266,8 @@ int aws_event_stream_message_init(struct aws_event_stream_message *message, stru
 
 /* add buffer to the message (non-owning). Verify buffer crcs and that length fields are reasonable. */
 int aws_event_stream_message_from_buffer(struct aws_event_stream_message *message,
-                                                             struct aws_allocator *alloc, uint8_t *buffer,
-                                                             size_t buffer_len) {
+                                         struct aws_allocator *alloc, uint8_t *buffer,
+                                         size_t buffer_len) {
 
     message->alloc = alloc;
     message->owns_buffer = 0;
@@ -310,9 +311,9 @@ int aws_event_stream_message_from_buffer(struct aws_event_stream_message *messag
 
 //Verify buffer crcs and that length fields are reasonable. Once that is done, the buffer is copied to the message.
 int aws_event_stream_message_from_buffer_copy(struct aws_event_stream_message *message,
-                                                                  struct aws_allocator *alloc,
-                                                                  const uint8_t *buffer, size_t buffer_len) {
-    int parse_value = aws_event_stream_message_from_buffer(message, alloc, (uint8_t *)buffer, buffer_len);
+                                              struct aws_allocator *alloc,
+                                              const uint8_t *buffer, size_t buffer_len) {
+    int parse_value = aws_event_stream_message_from_buffer(message, alloc, (uint8_t *) buffer, buffer_len);
 
     if (!parse_value) {
         message->message_buffer = aws_mem_acquire(alloc, buffer_len);
@@ -369,8 +370,8 @@ uint32_t aws_event_stream_message_payload_len(const struct aws_event_stream_mess
 
 uint32_t aws_event_stream_message_message_crc(const struct aws_event_stream_message *message) {
     return aws_read_u32(message->message_buffer +
-                                       (aws_event_stream_message_total_length(message) -
-                                        AWS_EVENT_STREAM_TRAILER_LENGTH));
+                        (aws_event_stream_message_total_length(message) -
+                         AWS_EVENT_STREAM_TRAILER_LENGTH));
 }
 
 const uint8_t *aws_event_stream_message_buffer(const struct aws_event_stream_message *message) {
@@ -388,19 +389,19 @@ const uint8_t *aws_event_stream_message_buffer(const struct aws_event_stream_mes
 
 int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_stream_message *message) {
     struct aws_array_list headers;
-    aws_array_list_init_dynamic(&headers, message->alloc, 4, sizeof(struct aws_event_stream_header_value_pair));
+    aws_event_stream_init_headers_list(&headers, message->alloc);
     aws_event_stream_message_headers(message, &headers);
 
     fprintf(fd, "{\n  " DEBUG_STR_PRELUDE_TOTAL_LEN  "%d,\n  "
-                                   DEBUG_STR_PRELUDE_HDRS_LEN "%d,\n  "
-                                   DEBUG_STR_PRELUDE_CRC "%d,\n",
-                           aws_event_stream_message_total_length(message),
-                           aws_event_stream_message_headers_len(message),
-                           aws_event_stream_message_prelude_crc(message));
+                    DEBUG_STR_PRELUDE_HDRS_LEN "%d,\n  "
+                    DEBUG_STR_PRELUDE_CRC "%d,\n",
+            aws_event_stream_message_total_length(message),
+            aws_event_stream_message_headers_len(message),
+            aws_event_stream_message_prelude_crc(message));
 
     int count = 0;
 
-    uint16_t headers_count = (uint16_t)aws_array_list_length(&headers);
+    uint16_t headers_count = (uint16_t) aws_array_list_length(&headers);
 
     fprintf(fd, "  \"headers\": [");
 
@@ -411,35 +412,29 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
         fprintf(fd, "    {\n");
 
         fprintf(fd, "      " DEBUG_STR_HEADER_NAME "\"");
-        fwrite(header->header_name, sizeof(char), (size_t)header->header_name_len, fd);
+        fwrite(header->header_name, sizeof(char), (size_t) header->header_name_len, fd);
         fprintf(fd, "\",\n");
 
         fprintf(fd, "      " DEBUG_STR_HEADER_TYPE "%d,\n", header->header_value_type);
 
         if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BOOL_FALSE) {
             fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "false\n");
-        }
-        else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BOOL_TRUE) {
+        } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BOOL_TRUE) {
             fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "true\n");
-        }
-        else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE) {
+        } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE) {
             uint8_t int_value = header->header_value.static_val[0];
-            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%d\n", (int)int_value);
-        }
-        else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT16) {
+            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%d\n", (int) int_value);
+        } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT16) {
             uint16_t int_value = aws_read_u16(header->header_value.static_val);
-            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%d\n", (int)int_value);
-        }
-        else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT32) {
+            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%d\n", (int) int_value);
+        } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT32) {
             uint32_t int_value = aws_read_u32(header->header_value.static_val);
-            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%d\n", (int)int_value);
-        }
-        else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT64 ||
+            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%d\n", (int) int_value);
+        } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT64 ||
                    header->header_value_type == AWS_EVENT_STREAM_HEADER_TIMESTAMP) {
             uint64_t int_value = aws_read_u64(header->header_value.static_val);
-            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%lld\n", (long long)int_value);
-        }
-        else {
+            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "%lld\n", (long long) int_value);
+        } else {
             size_t buffer_len = 0;
             aws_base64_compute_encoded_len(header->header_value_len, &buffer_len);
             char *encoded_buffer = (char *) aws_mem_acquire(message->alloc, buffer_len);
@@ -448,9 +443,9 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
             }
 
             if (header->header_value_type == AWS_EVENT_STREAM_HEADER_UUID) {
-                aws_base64_encode((uint8_t *) header->header_value.static_val, header->header_value_len, encoded_buffer, buffer_len);
-            }
-            else {
+                aws_base64_encode((uint8_t *) header->header_value.static_val, header->header_value_len, encoded_buffer,
+                                  buffer_len);
+            } else {
                 aws_base64_encode((uint8_t *) header->header_value.variable_len_val, header->header_value_len,
                                   encoded_buffer, buffer_len);
             }
@@ -460,31 +455,54 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
 
         fprintf(fd, "    }");
 
-        if(count < headers_count - 1) {
+        if (count < headers_count - 1) {
             fprintf(fd, ",");
         }
         fprintf(fd, "\n");
 
         count++;
     }
+    aws_event_stream_cleanup_headers(&headers);
     fprintf(fd, "  ],\n");
 
     size_t payload_len = aws_event_stream_message_payload_len(message);
     const uint8_t *payload = aws_event_stream_message_payload(message);
     size_t encoded_len = 0;
     aws_base64_compute_encoded_len(payload_len, &encoded_len);
-    char *encoded_payload = (char *)aws_mem_acquire(message->alloc, encoded_len);
+    char *encoded_payload = (char *) aws_mem_acquire(message->alloc, encoded_len);
 
-    if(!encoded_payload) {
+    if (!encoded_payload) {
         return aws_raise_error(AWS_ERROR_OOM);
     }
 
     aws_base64_encode(payload, payload_len, encoded_payload, encoded_len);
     fprintf(fd, "  \"payload\": \"%s\",\n", encoded_payload);
     fprintf(fd, "  " DEBUG_STR_MESSAGE_CRC "%d\n}\n",
-                        aws_event_stream_message_message_crc(message));
+            aws_event_stream_message_message_crc(message));
 
     return AWS_OP_SUCCESS;
+}
+
+int aws_event_stream_init_headers_list(struct aws_array_list *headers, struct aws_allocator *allocator) {
+    assert(headers);
+    assert(allocator);
+
+    return aws_array_list_init_dynamic(headers, allocator, 4, sizeof(struct aws_event_stream_header_value_pair));
+}
+
+void aws_event_stream_cleanup_headers(struct aws_array_list *headers) {
+    assert(headers);
+
+    for (size_t i = 0; i < aws_array_list_length(headers); ++i) {
+        struct aws_event_stream_header_value_pair *header;
+        aws_array_list_get_at_ptr(headers, (void **) &header, i);
+
+        if (header->value_owned) {
+            aws_mem_release(headers->alloc, (void *) header->header_value.variable_len_val);
+        }
+    }
+
+    aws_array_list_clean_up(headers);
 }
 
 int aws_event_stream_add_string_header(struct aws_array_list *headers, const char *name, int8_t name_len,
@@ -496,22 +514,22 @@ int aws_event_stream_add_string_header(struct aws_array_list *headers, const cha
             .header_value_type = AWS_EVENT_STREAM_HEADER_STRING
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
 
-    if(copy) {
+    if (copy) {
         header.header_value.variable_len_val = aws_mem_acquire(headers->alloc, value_len);
         if (!header.header_value.variable_len_val) {
             return aws_raise_error(AWS_ERROR_OOM);
         }
-
-        memcpy((void *)header.header_value.variable_len_val, (void *)value, value_len);
+        header.value_owned = 1;
+        memcpy((void *) header.header_value.variable_len_val, (void *) value, value_len);
+    } else {
+        header.value_owned = 0;
+        header.header_value.variable_len_val = (const uint8_t *) value;
     }
-    else {
-        header.header_value.variable_len_val = (const uint8_t *)value;
-    }
 
-    if(aws_array_list_push_back(headers, (void *)&header)) {
-        aws_mem_release(headers->alloc, (void *)header.header_value.variable_len_val);
+    if (aws_array_list_push_back(headers, (void *) &header)) {
+        aws_mem_release(headers->alloc, (void *) header.header_value.variable_len_val);
         return AWS_OP_ERR;
     }
 
@@ -527,9 +545,9 @@ int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char 
             .header_value.static_val[0] = value
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
 int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char *name, int8_t name_len, int8_t value) {
@@ -540,12 +558,13 @@ int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char 
             .header_value_type = value ? AWS_EVENT_STREAM_HEADER_BOOL_TRUE : AWS_EVENT_STREAM_HEADER_BOOL_FALSE,
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
-int aws_event_stream_add_uint16_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint16_t value) {
+int
+aws_event_stream_add_uint16_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint16_t value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = sizeof(uint16_t),
@@ -553,13 +572,14 @@ int aws_event_stream_add_uint16_header(struct aws_array_list *headers, const cha
             .header_value_type = AWS_EVENT_STREAM_HEADER_INT16,
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
     aws_write_u16(header.header_value.static_val, value);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
-int aws_event_stream_add_uint32_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint32_t value) {
+int
+aws_event_stream_add_uint32_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint32_t value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = sizeof(uint32_t),
@@ -567,13 +587,14 @@ int aws_event_stream_add_uint32_header(struct aws_array_list *headers, const cha
             .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
     aws_write_u32(header.header_value.static_val, value);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
-int aws_event_stream_add_uint64_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint64_t value) {
+int
+aws_event_stream_add_uint64_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint64_t value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = sizeof(uint64_t),
@@ -581,14 +602,14 @@ int aws_event_stream_add_uint64_header(struct aws_array_list *headers, const cha
             .header_value_type = AWS_EVENT_STREAM_HEADER_INT64,
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
     aws_write_u64(header.header_value.static_val, value);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
 int aws_event_stream_add_bytebuf_header(struct aws_array_list *headers, const char *name, int8_t name_len,
-                                                            uint8_t *value, uint16_t value_len, int8_t copy) {
+                                        uint8_t *value, uint16_t value_len, int8_t copy) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = value_len,
@@ -596,29 +617,31 @@ int aws_event_stream_add_bytebuf_header(struct aws_array_list *headers, const ch
             .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
 
-    if(copy) {
+    if (copy) {
         header.header_value.variable_len_val = aws_mem_acquire(headers->alloc, value_len);
         if (!header.header_value.variable_len_val) {
             return aws_raise_error(AWS_ERROR_OOM);
         }
 
-        memcpy((void *)header.header_value.variable_len_val, (void *)value, value_len);
-    }
-    else {
-        header.header_value.variable_len_val = (const uint8_t *)value;
+        header.value_owned = 1;
+        memcpy((void *) header.header_value.variable_len_val, (void *) value, value_len);
+    } else {
+        header.value_owned = 0;
+        header.header_value.variable_len_val = (const uint8_t *) value;
     }
 
-    if(aws_array_list_push_back(headers, (void *)&header)) {
-        aws_mem_release(headers->alloc, (void *)header.header_value.variable_len_val);
+    if (aws_array_list_push_back(headers, (void *) &header)) {
+        aws_mem_release(headers->alloc, (void *) header.header_value.variable_len_val);
         return AWS_OP_ERR;
     }
 
     return AWS_OP_SUCCESS;
 }
 
-int aws_event_stream_add_timestamp_header(struct aws_array_list *headers, const char *name, int8_t name_len, uint64_t value) {
+int aws_event_stream_add_timestamp_header(struct aws_array_list *headers, const char *name, int8_t name_len,
+                                          uint64_t value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = sizeof(uint64_t),
@@ -626,13 +649,14 @@ int aws_event_stream_add_timestamp_header(struct aws_array_list *headers, const 
             .header_value_type = AWS_EVENT_STREAM_HEADER_TIMESTAMP,
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
     aws_write_u64(header.header_value.static_val, value);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
-int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char *name, int8_t name_len, const uint8_t *value) {
+int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char *name, int8_t name_len,
+                                     const uint8_t *value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = sizeof(uint64_t),
@@ -640,10 +664,10 @@ int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char 
             .header_value_type = AWS_EVENT_STREAM_HEADER_UUID,
     };
 
-    memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
-    memcpy((void *)header.header_value.static_val, value, 16);
+    memcpy((void *) header.header_name, (void *) name, (size_t) name_len);
+    memcpy((void *) header.header_value.static_val, value, 16);
 
-    return aws_array_list_push_back(headers, (void *)&header);
+    return aws_array_list_push_back(headers, (void *) &header);
 }
 
 uint8_t aws_event_stream_header_value_as_byte(struct aws_event_stream_header_value_pair *header) {
@@ -652,11 +676,11 @@ uint8_t aws_event_stream_header_value_as_byte(struct aws_event_stream_header_val
 }
 
 const char *aws_event_stream_header_value_as_string(struct aws_event_stream_header_value_pair *header) {
-    return (const char *)header->header_value.variable_len_val;
+    return (const char *) header->header_value.variable_len_val;
 }
 
 int8_t aws_event_stream_header_value_as_bool(struct aws_event_stream_header_value_pair *header) {
-    return header->header_value_type == AWS_EVENT_STREAM_HEADER_BOOL_TRUE ? (int8_t)1 : (int8_t)0;
+    return header->header_value_type == AWS_EVENT_STREAM_HEADER_BOOL_TRUE ? (int8_t) 1 : (int8_t) 0;
 }
 
 uint16_t aws_event_stream_header_value_as_uint16(struct aws_event_stream_header_value_pair *header) {
@@ -706,11 +730,12 @@ static void reset_header_state(struct aws_event_stream_streaming_decoder *decode
         aws_mem_release(decoder->alloc, (void *) decoder->current_header.header_value.variable_len_val);
     }
 
-    memset((void *)&decoder->current_header, 0, sizeof(struct aws_event_stream_header_value_pair));
+    memset((void *) &decoder->current_header, 0, sizeof(struct aws_event_stream_header_value_pair));
 }
 
 static int
-read_header_value(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
+read_header_value(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len,
+                  size_t *processed) {
 
     size_t current_pos = decoder->message_pos;
 
@@ -735,8 +760,8 @@ read_header_value(struct aws_event_stream_streaming_decoder *decoder, const uint
         }
 
         /* a possible optimization later would be to only allocate this once, and then keep reusing the same buffer. for subsequent messages.*/
-        if(decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF ||
-                decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_STRING) {
+        if (decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF ||
+            decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_STRING) {
             decoder->current_header.header_value.variable_len_val = aws_mem_acquire(decoder->alloc,
                                                                                     decoder->current_header.header_value_len);
 
@@ -752,8 +777,9 @@ read_header_value(struct aws_event_stream_streaming_decoder *decoder, const uint
             len >= decoder->current_header.header_value_len - length_read ? decoder->current_header.header_value_len -
                                                                             length_read : len;
     const uint8_t *header_value_alias = decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF ||
-                                  decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_STRING ?
-                                  decoder->current_header.header_value.variable_len_val : decoder->current_header.header_value.static_val;
+                                        decoder->current_header.header_value_type == AWS_EVENT_STREAM_HEADER_STRING ?
+                                        decoder->current_header.header_value.variable_len_val
+                                                                                                                    : decoder->current_header.header_value.static_val;
 
     memcpy((void *) (header_value_alias + length_read), data, max_read);
     decoder->running_crc = aws_checksums_crc32(data, (int) max_read, decoder->running_crc);
@@ -800,7 +826,8 @@ static int read_header_value_len(struct aws_event_stream_streaming_decoder *deco
 
 
 static int
-read_header_type(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
+read_header_type(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len,
+                 size_t *processed) {
 
     uint8_t type = *data;
     decoder->running_crc = aws_checksums_crc32(data, 1, decoder->running_crc);
@@ -861,7 +888,8 @@ read_header_type(struct aws_event_stream_streaming_decoder *decoder, const uint8
 }
 
 static int
-read_header_name(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
+read_header_name(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len,
+                 size_t *processed) {
     size_t current_pos = decoder->message_pos;
 
     size_t length_read = current_pos - decoder->current_header_name_offset;
@@ -885,7 +913,8 @@ read_header_name(struct aws_event_stream_streaming_decoder *decoder, const uint8
 }
 
 static int
-read_header_name_len(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
+read_header_name_len(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len,
+                     size_t *processed) {
 
     decoder->current_header.header_name_len = *data;
     decoder->message_pos++;
@@ -931,7 +960,8 @@ headers_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t 
 
 /* handles reading the trailer. Once it has been read, it will be compared to the running checksum. If successful,  the state will be reset. */
 static int
-read_trailer_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
+read_trailer_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len,
+                   size_t *processed) {
 
     size_t remaining_amount = decoder->prelude.total_len - decoder->message_pos;
     size_t segment_length = len > remaining_amount ? remaining_amount : len;
@@ -968,7 +998,7 @@ payload_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t 
         size_t remaining_amount = decoder->prelude.total_len - decoder->message_pos - AWS_EVENT_STREAM_TRAILER_LENGTH;
         size_t segment_length = len > remaining_amount ? remaining_amount : len;
         int8_t final_segment = (segment_length + decoder->message_pos) ==
-                                (decoder->prelude.total_len - AWS_EVENT_STREAM_TRAILER_LENGTH);
+                               (decoder->prelude.total_len - AWS_EVENT_STREAM_TRAILER_LENGTH);
         decoder->on_payload(decoder, data, segment_length, final_segment, decoder->user_context);
         decoder->message_pos += segment_length;
         decoder->running_crc = aws_checksums_crc32(data, (int) segment_length, decoder->running_crc);
@@ -984,7 +1014,8 @@ payload_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t 
 
 /* Parses the payload and verifies checksums. Sets the next state if successful. */
 static int
-verify_prelude_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len, size_t *processed) {
+verify_prelude_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t *data, size_t len,
+                     size_t *processed) {
     decoder->prelude.headers_len = aws_read_u32(decoder->working_buffer + HEADER_LEN_OFFSET);
     decoder->prelude.prelude_crc = aws_read_u32(decoder->working_buffer + PRELUDE_CRC_OFFSET);
     decoder->prelude.total_len = aws_read_u32(decoder->working_buffer + TOTAL_LEN_OFFSET);
@@ -1047,12 +1078,13 @@ static void reset_state(struct aws_event_stream_streaming_decoder *decoder) {
     decoder->state = start_state;
 }
 
-void aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder, struct aws_allocator *alloc,
-                                             aws_event_stream_process_on_payload_segment on_payload_segment,
-                                             aws_event_stream_prelude_received on_prelude,
-                                             aws_event_stream_header_received on_header,
-                                             aws_event_stream_on_error on_error,
-                                             void *user_data) {
+void
+aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder, struct aws_allocator *alloc,
+                                        aws_event_stream_process_on_payload_segment on_payload_segment,
+                                        aws_event_stream_prelude_received on_prelude,
+                                        aws_event_stream_header_received on_header,
+                                        aws_event_stream_on_error on_error,
+                                        void *user_data) {
 
     reset_state(decoder);
     decoder->alloc = alloc;
@@ -1074,7 +1106,7 @@ void aws_event_stream_streaming_decoder_clean_up(struct aws_event_stream_streami
 
 /* Simply sends the data to the state machine until all has been processed or an error is returned. */
 int aws_event_stream_streaming_decoder_pump(struct aws_event_stream_streaming_decoder *decoder,
-                                           const uint8_t *data, size_t data_len) {
+                                            const uint8_t *data, size_t data_len) {
 
     size_t processed = 0;
     int err_val = 0;
