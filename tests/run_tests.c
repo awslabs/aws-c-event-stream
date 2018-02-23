@@ -18,19 +18,19 @@
 
 int main(int argc, char *argv[]) {
 
-    AWS_RUN_TEST_CASES( &test_incoming_no_op_valid,
-                        &test_incoming_application_data_no_headers_valid,
-                        &test_incoming_application_one_compressed_header_pair_valid,
-                        &test_incoming_application_int32_header_valid,
+    AWS_RUN_TEST_CASES(&test_incoming_no_op_valid,
+                       &test_incoming_application_data_no_headers_valid,
+                       &test_incoming_application_one_compressed_header_pair_valid,
+                       &test_incoming_application_int32_header_valid,
 
-                        &test_outgoing_no_op_valid,
-                        &test_outgoing_application_data_no_headers_valid,
-                        &test_outgoing_application_one_compressed_header_pair_valid,
+                       &test_outgoing_no_op_valid,
+                       &test_outgoing_application_data_no_headers_valid,
+                       &test_outgoing_application_one_compressed_header_pair_valid,
 
-                        &test_streaming_decoder_incoming_no_op_valid_single_message,
-                        &test_streaming_decoder_incoming_application_no_headers,
-                        &test_streaming_decoder_incoming_application_one_compressed_header_pair_valid,
-                        &test_streaming_decoder_incoming_multiple_messages
+                       &test_streaming_decoder_incoming_no_op_valid_single_message,
+                       &test_streaming_decoder_incoming_application_no_headers,
+                       &test_streaming_decoder_incoming_application_one_compressed_header_pair_valid,
+                       &test_streaming_decoder_incoming_multiple_messages
     );
 
 }
