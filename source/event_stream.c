@@ -635,7 +635,7 @@ int aws_event_stream_add_timestamp_header(struct aws_array_list *headers, const 
 int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char *name, int8_t name_len, const uint8_t *value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
-            .header_value_len = sizeof(uint64_t),
+            .header_value_len = 16,
             .value_owned = 0,
             .header_value_type = AWS_EVENT_STREAM_HEADER_UUID,
     };
