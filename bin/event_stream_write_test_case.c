@@ -118,7 +118,7 @@ write_positive_test_case(const char *root_dir, const char *test_name, struct aws
 
 int main(int argc, char *argv[]) {
     struct aws_array_list headers;
-    aws_event_stream_init_headers_list(&headers, &alloc);
+    aws_event_stream_headers_list_init(&headers, &alloc);
 
     struct aws_event_stream_message msg;
     aws_event_stream_message_init(&msg, &alloc, &headers, NULL, 0);
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
     static const char event_type[] = "event-type";
 
     aws_array_list_clear(&headers);
-    aws_event_stream_add_uint32_header(&headers, event_type, sizeof(event_type) - 1, 0x0000A00C);
+    aws_event_stream_add_int32_header(&headers, event_type, sizeof(event_type) - 1, 0x0000A00C);
     aws_event_stream_message_init(&msg, &alloc, &headers, (const uint8_t *) payload, sizeof(payload) - 1);
 
     write_positive_test_case(".", "int32_header", &msg);
@@ -202,7 +202,7 @@ int main(int argc, char *argv[]) {
     aws_array_list_clear(&headers);
 
     /* one of every header type */
-    aws_event_stream_add_uint32_header(&headers, event_type, sizeof(event_type) - 1, 0x0000A00C);
+    aws_event_stream_add_int32_header(&headers, event_type, sizeof(event_type) - 1, 0x0000A00C);
     aws_event_stream_add_string_header(&headers, content_type, sizeof(content_type) - 1, json, sizeof(json) - 1, 0);
 
     static const char bool_false[] = "bool false";
@@ -223,11 +223,11 @@ int main(int argc, char *argv[]) {
     static const char timestamp_hdr[] = "timestamp";
     aws_event_stream_add_timestamp_header(&headers, timestamp_hdr, sizeof(timestamp_hdr) - 1, 8675309);
 
-    static const char uint16_hdr[] = "int16";
-    aws_event_stream_add_uint16_header(&headers, uint16_hdr, sizeof(uint16_hdr) - 1, 42);
+    static const char int16_hdr[] = "int16";
+    aws_event_stream_add_int16_header(&headers, int16_hdr, sizeof(int16_hdr) - 1, 42);
 
-    static const char uint64_hdr[] = "int64";
-    aws_event_stream_add_uint64_header(&headers, uint64_hdr, sizeof(uint64_hdr) - 1, 42424242);
+    static const char int64_hdr[] = "int64";
+    aws_event_stream_add_int64_header(&headers, int64_hdr, sizeof(int64_hdr) - 1, 42424242);
 
 
     static const char uuid_hdr[] = "uuid";
@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
 
     write_positive_test_case(".", "all_headers", &msg);
     aws_event_stream_message_clean_up(&msg);
-    aws_event_stream_cleanup_headers(&headers);
+    aws_event_stream_headers_list_cleanup(&headers);
 
     return 0;
 }

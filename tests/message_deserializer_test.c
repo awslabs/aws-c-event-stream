@@ -101,7 +101,7 @@ static int test_outgoing_application_one_compressed_header_pair_valid_fn(struct 
                              "payload should have been %s", expected_str);
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_init_headers_list(&headers, alloc), "Header initialization failed");
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, alloc), "Header initialization failed");
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers), "Header parsing should have succeeded");
     ASSERT_INT_EQUALS(1, headers.length, "There should be exactly one header found");
@@ -122,7 +122,7 @@ static int test_outgoing_application_one_compressed_header_pair_valid_fn(struct 
     ASSERT_INT_EQUALS(0x8D9C08B1, aws_event_stream_message_message_crc(&message),
                       "Message CRC should have been 0x8D9C08B1");
 
-    aws_event_stream_cleanup_headers(&headers);
+    aws_event_stream_headers_list_cleanup(&headers);
     aws_event_stream_message_clean_up(&message);
 
     return 0;

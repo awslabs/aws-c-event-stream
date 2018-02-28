@@ -68,7 +68,7 @@ static int test_incoming_application_one_compressed_header_pair_valid_fn(struct 
     struct aws_event_stream_message message;
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_init_headers_list(&headers, alloc), "Header initialization failed");
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, alloc), "Header initialization failed");
 
     const char *header_name = "content-type";
     const char *header_value = "application/json";
@@ -84,7 +84,7 @@ static int test_incoming_application_one_compressed_header_pair_valid_fn(struct 
                              aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message),
                              "buffers didn't match");
 
-    aws_event_stream_cleanup_headers(&headers);
+    aws_event_stream_headers_list_cleanup(&headers);
     aws_event_stream_message_clean_up(&message);
 
     return 0;
@@ -104,11 +104,11 @@ static int test_incoming_application_int32_header_valid_fn(struct aws_allocator 
     struct aws_event_stream_message message;
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_init_headers_list(&headers, alloc), "Header initialization failed");
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, alloc), "Header initialization failed");
 
     const char *header_name = "event-id";
 
-    ASSERT_SUCCESS(aws_event_stream_add_uint32_header(&headers, header_name, (int8_t) strlen(header_name),
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(&headers, header_name, (int8_t) strlen(header_name),
                                                       0x0000A00c),
                    "Adding a header should have succeeded.");
 

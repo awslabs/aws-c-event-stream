@@ -62,7 +62,7 @@ typedef enum aws_event_stream_header_value_type {
 } aws_event_stream_header_value_type;
 
 struct aws_event_stream_header_value_pair {
-    int8_t header_name_len;
+    uint8_t header_name_len;
     const char header_name[INT8_MAX];
     aws_event_stream_header_value_type header_value_type;
     union {
@@ -225,67 +225,71 @@ extern "C" {
     /**
      * initializes a headers list for you. It will default to a capacity of 4 in dynamic mode.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_init_headers_list(struct aws_array_list *headers, struct aws_allocator *allocator);
+    AWS_EVENT_STREAM_API int aws_event_stream_headers_list_init(struct aws_array_list *headers,
+                                                                struct aws_allocator *allocator);
 
-    /*
+    /**
      * Cleans up the headers list. Also deallocates any headers that were the result of a copy flag for strings or buffer.
      */
-    AWS_EVENT_STREAM_API void aws_event_stream_cleanup_headers(struct aws_array_list *headers);
+    AWS_EVENT_STREAM_API void aws_event_stream_headers_list_cleanup(struct aws_array_list *headers);
 
     /**
      * Adds a string header to the list of headers. If copy is set to true, this will result in an allocation for the header value.
      * Otherwise, the value will be set to the memory address of 'value'.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_string_header(struct aws_array_list *headers, const char *name, int8_t name_len,
+    AWS_EVENT_STREAM_API int aws_event_stream_add_string_header(struct aws_array_list *headers, const char *name, uint8_t name_len,
                                                                 const char *value, uint16_t value_len, int8_t copy);
 
     /**
      * Adds a byte header to the list of headers.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char *name, int8_t name_len,
-                                                           uint8_t value);
+    AWS_EVENT_STREAM_API int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char *name, uint8_t name_len,
+                                                           int8_t value);
 
     /**
      * Adds a bool header to the list of headers.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char *name, int8_t name_len,
+    AWS_EVENT_STREAM_API int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char *name, uint8_t name_len,
                                                            int8_t value);
 
     /**
      * adds a 16 bit integer to the list of headers.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_uint16_header(struct aws_array_list *headers, const char *name, int8_t name_len,
-                                                           uint16_t value);
+    AWS_EVENT_STREAM_API int aws_event_stream_add_int16_header(struct aws_array_list *headers, const char *name,
+                                                               uint8_t name_len,
+                                                               int16_t value);
 
     /**
      * adds a 32 bit integer to the list of headers.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_uint32_header(struct aws_array_list *headers, const char *name, int8_t name_len,
-                                                           uint32_t value);
+    AWS_EVENT_STREAM_API int aws_event_stream_add_int32_header(struct aws_array_list *headers, const char *name,
+                                                               uint8_t name_len,
+                                                               int32_t value);
 
     /**
     * adds a 64 bit integer to the list of headers.
     */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_uint64_header(struct aws_array_list *headers, const char *name, int8_t name_len,
-                                                           uint64_t value);
+    AWS_EVENT_STREAM_API int aws_event_stream_add_int64_header(struct aws_array_list *headers, const char *name,
+                                                               uint8_t name_len,
+                                                               int64_t value);
 
     /**
      * Adds a byte-buffer header to the list of headers. If copy is set to true, this will result in an allocation for the header value.
      * Otherwise, the value will be set to the memory address of 'value'.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_bytebuf_header(struct aws_array_list *headers, const char *name, int8_t name_len,
+    AWS_EVENT_STREAM_API int aws_event_stream_add_bytebuf_header(struct aws_array_list *headers, const char *name, uint8_t name_len,
                                                            uint8_t *value, uint16_t value_len, int8_t copy);
 
    /**
     * adds a 64 bit integer representing milliseconds since unix epoch to the list of headers.
     */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_timestamp_header(struct aws_array_list *headers, const char *name, int8_t name_len,
-                                                           uint64_t value);
+    AWS_EVENT_STREAM_API int aws_event_stream_add_timestamp_header(struct aws_array_list *headers, const char *name, uint8_t name_len,
+                                                           int64_t value);
 
     /**
      * adds a uuid buffer to the list of headers. Value must always be 16 bytes long.
      */
-    AWS_EVENT_STREAM_API int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char *name, int8_t name_len,
+    AWS_EVENT_STREAM_API int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char *name, uint8_t name_len,
                                                             const uint8_t *value);
 
     /**
@@ -297,7 +301,7 @@ extern "C" {
     /**
      * Returns the header value as a byte
      */
-    AWS_EVENT_STREAM_API uint8_t aws_event_stream_header_value_as_byte(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API int8_t aws_event_stream_header_value_as_byte(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value as a boolean value.
@@ -307,17 +311,17 @@ extern "C" {
     /**
      * Returns the header value as a 16 bit integer.
      */
-    AWS_EVENT_STREAM_API uint16_t aws_event_stream_header_value_as_uint16(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API int16_t aws_event_stream_header_value_as_int16(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value as a 32 bit integer.
      */
-    AWS_EVENT_STREAM_API uint32_t aws_event_stream_header_value_as_uint32(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API int32_t aws_event_stream_header_value_as_int32(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value as a 64 bit integer.
      */
-    AWS_EVENT_STREAM_API uint64_t aws_event_stream_header_value_as_uint64(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API int64_t aws_event_stream_header_value_as_int64(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value as a pointer to a byte buffer, call aws_event_stream_header_value_length to determine
@@ -328,7 +332,7 @@ extern "C" {
     /**
      * Returns the header value as a 64 bit integer representing milliseconds since unix epoch.
      */
-    AWS_EVENT_STREAM_API uint64_t aws_event_stream_header_value_as_timestamp(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API int64_t aws_event_stream_header_value_as_timestamp(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value a byte buffer which is 16 bytes long. Represents a UUID.
