@@ -27,10 +27,10 @@ struct test_decoder_data {
 };
 
 static void decoder_test_on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
-                                            const uint8_t *data, size_t len, int8_t final_segment, void *user_data) {
+                                            struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
     struct test_decoder_data *decoder_data = (struct test_decoder_data *) user_data;
-    memcpy(decoder_data->latest_payload + decoder_data->written, data, len);
-    decoder_data->written += len;
+    memcpy(decoder_data->latest_payload + decoder_data->written, data->buffer, data->len);
+    decoder_data->written += data->len;
 }
 
 static void decider_test_on_prelude_received(struct aws_event_stream_streaming_decoder *decoder,
@@ -85,7 +85,8 @@ static int test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct 
                                             decider_test_on_prelude_received,
                                             decider_test_header_received, decider_test_on_error, &decoder_data);
 
-    ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, test_data, sizeof(test_data)),
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+    ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, &test_buf),
                    "Message validation should have succeeded");
     ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
@@ -123,7 +124,9 @@ static int test_streaming_decoder_incoming_application_no_headers_fn(struct aws_
                                             decider_test_on_prelude_received,
                                             decider_test_header_received, decider_test_on_error, &decoder_data);
 
-    ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, test_data, sizeof(test_data)),
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+
+    ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, &test_buf),
                    "Message validation should have succeeded");
     ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
@@ -174,7 +177,10 @@ static int test_streaming_decoder_incoming_application_one_compressed_header_pai
                                             decider_test_on_prelude_received,
                                             decider_test_header_received, decider_test_on_error, &decoder_data);
 
-    ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, test_data, sizeof(test_data)),
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+
+
+    ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, &test_buf),
                    "Message validation should have succeeded");
     ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
@@ -243,7 +249,8 @@ static int test_streaming_decoder_incoming_multiple_messages_fn(struct aws_alloc
     size_t current_written = 0;
     int err_code = 0;
     while (current_written < first_message_size && !err_code) {
-        err_code = aws_event_stream_streaming_decoder_pump(&decoder, test_data + current_written, read_size);
+        struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data + current_written, read_size);
+        err_code = aws_event_stream_streaming_decoder_pump(&decoder, &test_buf);
         current_written += read_size;
     }
 
@@ -260,7 +267,8 @@ static int test_streaming_decoder_incoming_multiple_messages_fn(struct aws_alloc
     while (current_written < sizeof(test_data) && !err_code) {
         size_t to_write =
                 current_written + read_size < sizeof(test_data) ? read_size : sizeof(test_data) - current_written;
-        err_code = aws_event_stream_streaming_decoder_pump(&decoder, test_data + current_written, to_write);
+        struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data + current_written, to_write);
+        err_code = aws_event_stream_streaming_decoder_pump(&decoder, &test_buf);
         current_written += to_write;
     }
 

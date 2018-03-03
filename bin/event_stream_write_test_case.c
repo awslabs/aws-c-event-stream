@@ -121,14 +121,14 @@ int main(int argc, char *argv[]) {
     aws_event_stream_headers_list_init(&headers, &alloc);
 
     struct aws_event_stream_message msg;
-    aws_event_stream_message_init(&msg, &alloc, &headers, NULL, 0);
+    aws_event_stream_message_init(&msg, &alloc, &headers, NULL);
 
     write_positive_test_case(".", "empty_message", &msg);
 
-    static const char payload[] = "{'foo':'bar'}";
+    struct aws_byte_buf payload = aws_byte_buf_from_literal("{'foo':'bar'}");
 
     aws_event_stream_message_clean_up(&msg);
-    aws_event_stream_message_init(&msg, &alloc, &headers, (const uint8_t *) payload, sizeof(payload) - 1);
+    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
 
     write_positive_test_case(".", "payload_no_headers", &msg);
     aws_event_stream_message_clean_up(&msg);
@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
     static const char json[] = "application/json";
 
     aws_event_stream_add_string_header(&headers, content_type, sizeof(content_type) - 1, json, sizeof(json) - 1, 0);
-    aws_event_stream_message_init(&msg, &alloc, &headers, (const uint8_t *) payload, sizeof(payload) - 1);
+    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
 
     write_positive_test_case(".", "payload_one_str_header", &msg);
 
@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
     aws_event_stream_message_clean_up(&msg);
 
     /* corrupt payload */
-    aws_event_stream_message_init(&msg, &alloc, NULL, (const uint8_t *) payload, sizeof(payload) - 1);
+    aws_event_stream_message_init(&msg, &alloc, NULL, &payload);
     ((uint8_t *) aws_event_stream_message_payload(&msg))[0] = '[';
     write_negative_test_case(".", "corrupted_payload", aws_event_stream_message_buffer(&msg),
                              aws_event_stream_message_total_length(&msg),
@@ -194,7 +194,7 @@ int main(int argc, char *argv[]) {
 
     aws_array_list_clear(&headers);
     aws_event_stream_add_int32_header(&headers, event_type, sizeof(event_type) - 1, 0x0000A00C);
-    aws_event_stream_message_init(&msg, &alloc, &headers, (const uint8_t *) payload, sizeof(payload) - 1);
+    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
 
     write_positive_test_case(".", "int32_header", &msg);
     aws_event_stream_message_clean_up(&msg);
@@ -234,12 +234,14 @@ int main(int argc, char *argv[]) {
     static const uint8_t uuid[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
     aws_event_stream_add_uuid_header(&headers, uuid_hdr, sizeof(uuid_hdr) - 1, (uint8_t *) uuid);
-    aws_event_stream_message_init(&msg, &alloc, &headers, (const uint8_t *) payload, sizeof(payload) - 1);
+    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
 
     struct aws_event_stream_message sanity_check_message;
+    struct aws_byte_buf message_buffer = aws_byte_buf_from_array(aws_event_stream_message_buffer(&msg),
+                                                                 aws_event_stream_message_total_length(&msg));
+
     int err = aws_event_stream_message_from_buffer(&sanity_check_message, &alloc,
-                                                   (uint8_t *) aws_event_stream_message_buffer(&msg),
-                                                   aws_event_stream_message_total_length(&msg));
+                                                   &message_buffer);
 
     if (err) {
         fprintf(stderr, "failed to parse what should have been a valid message\n");

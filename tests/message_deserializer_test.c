@@ -21,7 +21,8 @@ static int test_outgoing_no_op_valid_fn(struct aws_allocator *alloc, void *ctx) 
                            0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
 
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, NULL, test_data, sizeof(test_data)),
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, NULL, &test_buf),
                    "Message validation should have succeeded");
 
     ASSERT_INT_EQUALS(0x00000010, aws_event_stream_message_total_length(&message),
@@ -46,7 +47,9 @@ static int test_outgoing_application_data_no_headers_valid_fn(struct aws_allocat
                            0x36};
 
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, NULL, test_data, sizeof(test_data)),
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, NULL, &test_buf),
                    "Message validation should have succeeded");
 
     ASSERT_INT_EQUALS(0x0000001D, aws_event_stream_message_total_length(&message),
@@ -82,7 +85,9 @@ static int test_outgoing_application_one_compressed_header_pair_valid_fn(struct 
                            0x8D, 0x9C, 0x08, 0xB1};
 
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, alloc, test_data, sizeof(test_data)),
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, alloc, &test_buf),
                    "Message validation should have succeeded");
 
     ASSERT_INT_EQUALS(0x0000003D, aws_event_stream_message_total_length(&message),
@@ -112,11 +117,15 @@ static int test_outgoing_application_one_compressed_header_pair_valid_fn(struct 
     const char *content_type = "content-type";
     const char *content_type_value = "application/json";
 
+    struct aws_byte_buf header_name_buf = aws_event_stream_header_name(&header);
     ASSERT_BIN_ARRAYS_EQUALS(content_type, strlen(content_type),
-                             header.header_name, header.header_name_len,
+                             header_name_buf.buffer, header_name_buf.len,
                              "header name should have been %s", content_type);
+
+    struct aws_byte_buf header_value_buf = aws_event_stream_header_value_as_string(&header);
+
     ASSERT_BIN_ARRAYS_EQUALS(content_type_value, strlen(content_type_value),
-                             aws_event_stream_header_value_as_string(&header), header.header_value_len,
+                             header_value_buf.buffer, header_value_buf.len,
                              "header value should have been %s", content_type_value);
 
     ASSERT_INT_EQUALS(0x8D9C08B1, aws_event_stream_message_message_crc(&message),

@@ -18,12 +18,15 @@
 
 #include <aws/event-stream/event_stream_exports.h>
 #include <aws/common/array_list.h>
+#include <aws/common/byte_buf.h>
+
 #include <stdint.h>
 
 
 typedef enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = 0x1000,
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
+    AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED,
     AWS_ERROR_EVENT_STREAM_PRELUDE_CHECKSUM_FAILURE,
     AWS_ERROR_EVENT_STREAM_MESSAGE_CHECKSUM_FAILURE,
     AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN,
@@ -84,7 +87,7 @@ typedef int(*aws_event_stream_process_state_fn)(struct aws_event_stream_streamin
  * final_segment == 1 indicates the current data is the last payload buffer for that message.
  */
 typedef void(*aws_event_stream_process_on_payload_segment)(struct aws_event_stream_streaming_decoder *decoder,
-    const uint8_t *data, size_t len, int8_t final_segment, void *user_data);
+    struct aws_byte_buf *payload, int8_t final_segment, void *user_data);
 
 /**
  * Called by aws_amazon_flow_streaming_decoder when a new message has arrived. The prelude will contain metadata
@@ -134,23 +137,23 @@ extern "C" {
      * Both payload and headers will result in an allocation.
      */
     AWS_EVENT_STREAM_API int aws_event_stream_message_init(struct aws_event_stream_message *message,
-                                                          struct aws_allocator *alloc,
-                                                          struct aws_array_list *header_list,
-                                                          const uint8_t *payload, size_t payload_len);
+                                                           struct aws_allocator *alloc,
+                                                           struct aws_array_list *header_list,
+                                                           struct aws_byte_buf *payload);
 
     /**
      * Zero allocation, Zero copy. The message will simply wrap the buffer. The message functions are only useful as long as buffer is referencable memory.
      */
     AWS_EVENT_STREAM_API int aws_event_stream_message_from_buffer(struct aws_event_stream_message *message,
-                                                                 struct aws_allocator *alloc,
-                                                                 uint8_t *buffer, size_t buffer_len);
+                                                                  struct aws_allocator *alloc,
+                                                                  struct aws_byte_buf *buffer);
 
     /**
      * Allocates memory and copies buffer. Otherwise the same as aws_amazon_flow_message_from_buffer. This is slower, but possibly safer.
      */
     AWS_EVENT_STREAM_API int aws_event_stream_message_from_buffer_copy(struct aws_event_stream_message *message,
-                                                                      struct aws_allocator *alloc,
-                                                                      const uint8_t *buffer, size_t buffer_len);
+                                                                       struct aws_allocator *alloc,
+                                                                       const struct aws_byte_buf *buffer);
 
     /**
      * Cleans up any internally allocated memory. Always call this for API compatibility reasons, even if you only used the
@@ -293,10 +296,14 @@ extern "C" {
                                                             const uint8_t *value);
 
     /**
-     * Returns the header value as a string. Note it is not null terminated. Call aws_event_stream_header_value_length to determine
-     * the length of the string.
+     * Returns the header name. Note: this value is not null terminated
      */
-    AWS_EVENT_STREAM_API const char *aws_event_stream_header_value_as_string(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API struct aws_byte_buf aws_event_stream_header_name(struct aws_event_stream_header_value_pair *header);
+
+    /**
+     * Returns the header value as a string. Note: this value is not null terminated.
+     */
+    AWS_EVENT_STREAM_API struct aws_byte_buf aws_event_stream_header_value_as_string(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value as a byte
@@ -327,7 +334,7 @@ extern "C" {
      * Returns the header value as a pointer to a byte buffer, call aws_event_stream_header_value_length to determine
      * the length of the buffer.
      */
-    AWS_EVENT_STREAM_API const uint8_t *aws_event_stream_header_value_as_bytebuf(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API struct aws_byte_buf aws_event_stream_header_value_as_bytebuf(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the header value as a 64 bit integer representing milliseconds since unix epoch.
@@ -337,7 +344,7 @@ extern "C" {
     /**
      * Returns the header value a byte buffer which is 16 bytes long. Represents a UUID.
      */
-    AWS_EVENT_STREAM_API const uint8_t *aws_event_stream_header_value_as_uuid(struct aws_event_stream_header_value_pair *header);
+    AWS_EVENT_STREAM_API struct aws_byte_buf aws_event_stream_header_value_as_uuid(struct aws_event_stream_header_value_pair *header);
 
     /**
      * Returns the length of the header value buffer. This is mostly intended for string and byte buffer types.
@@ -348,7 +355,7 @@ extern "C" {
      * The main driver of the decoder. Pass data that should be decoded with its length. A likely use-case here is in response to a read event from an io-device
      */
     AWS_EVENT_STREAM_API int aws_event_stream_streaming_decoder_pump(struct aws_event_stream_streaming_decoder *decoder,
-        const uint8_t *data, size_t data_len);
+        const struct aws_byte_buf *data);
 
     /**
      * Loads error strings for this API so that aws_last_error_str etc... will return useful debug strings.

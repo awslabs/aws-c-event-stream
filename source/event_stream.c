@@ -20,6 +20,11 @@
 #include <inttypes.h>
 #include <assert.h>
 
+/* max message size is 16MB */
+#define MAX_MESSAGE_SIZE (16 * 1024 * 1024)
+
+/* max header size is 128kb */
+#define MAX_HEADERS_SIZE (128 * 1024)
 #define LIB_NAME "libaws-c-event-stream"
 
 static struct aws_error_info errors[] = {
@@ -27,6 +32,8 @@ static struct aws_error_info errors[] = {
                               "Buffer length mismatch", LIB_NAME),
         AWS_DEFINE_ERROR_INFO(aws_error_insufficient_buffer_len, AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
                               "insufficient buffer length", LIB_NAME),
+        AWS_DEFINE_ERROR_INFO(aws_error_message_field_size_exceeded, AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED,
+                              "a field for the message was too large", LIB_NAME),
         AWS_DEFINE_ERROR_INFO(aws_error_prelude_checksum_failure, AWS_ERROR_EVENT_STREAM_PRELUDE_CHECKSUM_FAILURE,
                               "prelude checksum was incorrect", LIB_NAME),
         AWS_DEFINE_ERROR_INFO(aws_error_message_checksum_failure, AWS_ERROR_EVENT_STREAM_MESSAGE_CHECKSUM_FAILURE,
@@ -89,8 +96,9 @@ uint32_t compute_headers_len(struct aws_array_list *headers) {
 }
 
 /* adds the headers represented in the headers list to the buffer.
- returns the new buffer offset for use elsewhere. */
-size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer, size_t buffer_length) {
+ returns the new buffer offset for use elsewhere. Assumes buffer length is at least the length of the return value
+ from compute_headers_length() */
+size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
     if (!headers || !aws_array_list_length(headers)) return 0;
 
     size_t headers_count = aws_array_list_length(headers);
@@ -152,6 +160,10 @@ size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer, si
 int get_headers_from_buffer(struct aws_array_list *headers,
                             const uint8_t *buffer, size_t headers_len) {
 
+    if(AWS_UNLIKELY(headers_len > MAX_HEADERS_SIZE)) {
+        return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
+    }
+
     /* iterate the buffer per header. */
     const uint8_t *buffer_start = buffer;
     while ((size_t) (buffer - buffer_start) < headers_len) {
@@ -159,7 +171,7 @@ int get_headers_from_buffer(struct aws_array_list *headers,
 
         /* get the header info from the buffer, make sure to increment buffer offset. */
         header.header_name_len = *buffer;
-        buffer += sizeof(uint8_t);
+        buffer += sizeof(header.header_name_len);
         memcpy((void *) header.header_name, buffer, (size_t) header.header_name_len);
         buffer += header.header_name_len;
         header.header_value_type = (aws_event_stream_header_value_type) *buffer;
@@ -198,7 +210,7 @@ int get_headers_from_buffer(struct aws_array_list *headers,
             case AWS_EVENT_STREAM_HEADER_BYTE_BUF:
             case AWS_EVENT_STREAM_HEADER_STRING:
                 header.header_value_len = aws_read_u16(buffer);
-                buffer += sizeof(uint16_t);
+                buffer += sizeof(header.header_value_len);
                 header.header_value.variable_len_val = buffer;
                 buffer += header.header_value_len;
                 break;
@@ -222,11 +234,26 @@ int get_headers_from_buffer(struct aws_array_list *headers,
  * see specification, this code should simply add these fields according to that.*/
 int aws_event_stream_message_init(struct aws_event_stream_message *message, struct aws_allocator *alloc,
                                   struct aws_array_list *headers,
-                                  const uint8_t *payload, size_t payload_len) {
+                                  struct aws_byte_buf *payload) {
+
+    size_t payload_len = payload ? payload->len : 0;
 
     uint32_t headers_length = compute_headers_len(headers);
+
+    if(AWS_UNLIKELY(headers_length > MAX_HEADERS_SIZE)) {
+        return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
+    }
+
     uint32_t total_length = (uint32_t)
             (AWS_EVENT_STREAM_PRELUDE_LENGTH + headers_length + payload_len + AWS_EVENT_STREAM_TRAILER_LENGTH);
+
+    if(AWS_UNLIKELY(total_length < headers_length || total_length < payload_len)) {
+        return aws_raise_error(AWS_ERROR_OVERFLOW_DETECTED);
+    }
+
+    if(AWS_UNLIKELY(total_length > MAX_MESSAGE_SIZE)) {
+        return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
+    }
 
     message->alloc = alloc;
     message->message_buffer = (uint8_t *) aws_mem_acquire(message->alloc, total_length);
@@ -234,24 +261,24 @@ int aws_event_stream_message_init(struct aws_event_stream_message *message, stru
     if (message->message_buffer) {
         message->owns_buffer = 1;
         aws_write_u32(message->message_buffer, total_length);
-        uint8_t *buffer_offset = message->message_buffer + sizeof(uint32_t);
+        uint8_t *buffer_offset = message->message_buffer + sizeof(total_length);
         aws_write_u32(buffer_offset, headers_length);
-        buffer_offset += sizeof(uint32_t);
+        buffer_offset += sizeof(headers_length);
 
         uint32_t running_crc = aws_checksums_crc32(message->message_buffer,
                                                    (int) (buffer_offset - message->message_buffer), 0);
 
         const uint8_t *message_crc_boundary_start = buffer_offset;
         aws_write_u32(buffer_offset, running_crc);
-        buffer_offset += sizeof(uint32_t);
+        buffer_offset += sizeof(running_crc);
 
         if (headers_length) {
-            buffer_offset += add_headers_to_buffer(headers, buffer_offset, headers_length);
+            buffer_offset += add_headers_to_buffer(headers, buffer_offset);
         }
 
         if (payload) {
-            memcpy(buffer_offset, payload, payload_len);
-            buffer_offset += payload_len;
+            memcpy(buffer_offset, payload->buffer, payload->len);
+            buffer_offset += payload->len;
         }
 
         running_crc = aws_checksums_crc32(message_crc_boundary_start,
@@ -266,39 +293,43 @@ int aws_event_stream_message_init(struct aws_event_stream_message *message, stru
 
 /* add buffer to the message (non-owning). Verify buffer crcs and that length fields are reasonable. */
 int aws_event_stream_message_from_buffer(struct aws_event_stream_message *message,
-                                         struct aws_allocator *alloc, uint8_t *buffer,
-                                         size_t buffer_len) {
+                                         struct aws_allocator *alloc, struct aws_byte_buf *buffer) {
+    assert(buffer);
 
     message->alloc = alloc;
     message->owns_buffer = 0;
 
-    if (buffer_len < AWS_EVENT_STREAM_PRELUDE_LENGTH + AWS_EVENT_STREAM_TRAILER_LENGTH) {
+    if (AWS_UNLIKELY(buffer->len < AWS_EVENT_STREAM_PRELUDE_LENGTH + AWS_EVENT_STREAM_TRAILER_LENGTH)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
     }
 
-    uint32_t message_length = aws_read_u32(buffer + TOTAL_LEN_OFFSET);
+    uint32_t message_length = aws_read_u32(buffer->buffer + TOTAL_LEN_OFFSET);
 
-    if (message_length != buffer_len) {
+    if (AWS_UNLIKELY(message_length != buffer->len)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
     }
 
-    uint32_t running_crc = aws_checksums_crc32(buffer, (int) PRELUDE_CRC_OFFSET, 0);
-    uint32_t prelude_crc = aws_read_u32(buffer + PRELUDE_CRC_OFFSET);
+    if (AWS_UNLIKELY(message_length > MAX_MESSAGE_SIZE)) {
+        return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
+    }
+
+    uint32_t running_crc = aws_checksums_crc32(buffer->buffer, (int) PRELUDE_CRC_OFFSET, 0);
+    uint32_t prelude_crc = aws_read_u32(buffer->buffer + PRELUDE_CRC_OFFSET);
 
     if (running_crc != prelude_crc) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_PRELUDE_CHECKSUM_FAILURE);
     }
 
-    running_crc = aws_checksums_crc32(buffer + PRELUDE_CRC_OFFSET,
+    running_crc = aws_checksums_crc32(buffer->buffer + PRELUDE_CRC_OFFSET,
                                       (int) (message_length - PRELUDE_CRC_OFFSET - AWS_EVENT_STREAM_TRAILER_LENGTH),
                                       running_crc);
-    uint32_t message_crc = aws_read_u32(buffer + message_length - AWS_EVENT_STREAM_TRAILER_LENGTH);
+    uint32_t message_crc = aws_read_u32(buffer->buffer + message_length - AWS_EVENT_STREAM_TRAILER_LENGTH);
 
     if (running_crc != message_crc) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_CHECKSUM_FAILURE);
     }
 
-    message->message_buffer = buffer;
+    message->message_buffer = buffer->buffer;
 
     if (aws_event_stream_message_headers_len(message) >
         message_length - AWS_EVENT_STREAM_PRELUDE_LENGTH - AWS_EVENT_STREAM_TRAILER_LENGTH) {
@@ -312,14 +343,14 @@ int aws_event_stream_message_from_buffer(struct aws_event_stream_message *messag
 //Verify buffer crcs and that length fields are reasonable. Once that is done, the buffer is copied to the message.
 int aws_event_stream_message_from_buffer_copy(struct aws_event_stream_message *message,
                                               struct aws_allocator *alloc,
-                                              const uint8_t *buffer, size_t buffer_len) {
-    int parse_value = aws_event_stream_message_from_buffer(message, alloc, (uint8_t *) buffer, buffer_len);
+                                              const struct aws_byte_buf *buffer) {
+    int parse_value = aws_event_stream_message_from_buffer(message, alloc, (struct aws_byte_buf *)buffer);
 
     if (!parse_value) {
-        message->message_buffer = aws_mem_acquire(alloc, buffer_len);
+        message->message_buffer = aws_mem_acquire(alloc, buffer->len);
 
         if (message->message_buffer) {
-            memcpy(message->message_buffer, buffer, buffer_len);
+            memcpy(message->message_buffer, buffer->buffer, buffer->len);
             message->alloc = alloc;
             message->owns_buffer = 1;
 
@@ -442,12 +473,17 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
                 return aws_raise_error(AWS_ERROR_OOM);
             }
 
+            struct aws_byte_buf encode_output = aws_byte_buf_from_c_str(encoded_buffer, buffer_len);
+
             if (header->header_value_type == AWS_EVENT_STREAM_HEADER_UUID) {
-                aws_base64_encode((uint8_t *) header->header_value.static_val, header->header_value_len, encoded_buffer,
-                                  buffer_len);
+                struct aws_byte_buf to_encode =
+                        aws_byte_buf_from_array(header->header_value.static_val, header->header_value_len);
+
+                aws_base64_encode(&to_encode, &encode_output);
             } else {
-                aws_base64_encode((uint8_t *) header->header_value.variable_len_val, header->header_value_len,
-                                  encoded_buffer, buffer_len);
+                struct aws_byte_buf to_encode =
+                        aws_byte_buf_from_array(header->header_value.variable_len_val, header->header_value_len);
+                aws_base64_encode(&to_encode, &encode_output);
             }
             fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "\"%s\"\n", encoded_buffer);
             aws_mem_release(message->alloc, encoded_buffer);
@@ -475,7 +511,10 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
         return aws_raise_error(AWS_ERROR_OOM);
     }
 
-    aws_base64_encode(payload, payload_len, encoded_payload, encoded_len);
+    struct aws_byte_buf payload_buffer = aws_byte_buf_from_array(payload, payload_len);
+    struct aws_byte_buf encoded_payload_buffer = aws_byte_buf_from_c_str(encoded_payload, encoded_len);
+
+    aws_base64_encode(&payload_buffer, &encoded_payload_buffer);
     fprintf(fd, "  \"payload\": \"%s\",\n", encoded_payload);
     fprintf(fd, "  " DEBUG_STR_MESSAGE_CRC "%d\n}\n",
             aws_event_stream_message_message_crc(message));
@@ -670,13 +709,16 @@ int aws_event_stream_add_uuid_header(struct aws_array_list *headers, const char 
     return aws_array_list_push_back(headers, (void *) &header);
 }
 
-int8_t aws_event_stream_header_value_as_byte(struct aws_event_stream_header_value_pair *header) {
-    return (int8_t)header->header_value.static_val[0];
-
+struct aws_byte_buf aws_event_stream_header_name(struct aws_event_stream_header_value_pair *header) {
+    return aws_byte_buf_from_c_str(header->header_name, header->header_name_len);
 }
 
-const char *aws_event_stream_header_value_as_string(struct aws_event_stream_header_value_pair *header) {
-    return (const char *) header->header_value.variable_len_val;
+int8_t aws_event_stream_header_value_as_byte(struct aws_event_stream_header_value_pair *header) {
+    return (int8_t)header->header_value.static_val[0];
+}
+
+struct aws_byte_buf aws_event_stream_header_value_as_string(struct aws_event_stream_header_value_pair *header) {
+    return aws_event_stream_header_value_as_bytebuf(header);
 }
 
 int8_t aws_event_stream_header_value_as_bool(struct aws_event_stream_header_value_pair *header) {
@@ -695,16 +737,16 @@ int64_t aws_event_stream_header_value_as_int64(struct aws_event_stream_header_va
     return (int64_t)aws_read_u64(header->header_value.static_val);
 }
 
-const uint8_t *aws_event_stream_header_value_as_bytebuf(struct aws_event_stream_header_value_pair *header) {
-    return header->header_value.variable_len_val;
+struct aws_byte_buf aws_event_stream_header_value_as_bytebuf(struct aws_event_stream_header_value_pair *header) {
+    return aws_byte_buf_from_array(header->header_value.variable_len_val, header->header_value_len);
 }
 
 int64_t aws_event_stream_header_value_as_timestamp(struct aws_event_stream_header_value_pair *header) {
     return aws_event_stream_header_value_as_int64(header);
 }
 
-const uint8_t *aws_event_stream_header_value_as_uuid(struct aws_event_stream_header_value_pair *header) {
-    return header->header_value.static_val;
+struct aws_byte_buf aws_event_stream_header_value_as_uuid(struct aws_event_stream_header_value_pair *header) {
+    return aws_byte_buf_from_array(header->header_value.static_val, 16);
 }
 
 uint16_t aws_event_stream_header_value_length(struct aws_event_stream_header_value_pair *header) {
@@ -946,12 +988,11 @@ headers_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t 
 
     size_t headers_boundary = decoder->prelude.headers_len + AWS_EVENT_STREAM_PRELUDE_LENGTH;
 
-    /** One header is more likely than multiple, so let the branch predictor hit this first */
-    if (current_pos == headers_boundary) {
-        decoder->state = payload_state;
-        return AWS_OP_SUCCESS;
-    } else if (current_pos < headers_boundary) {
+    if (current_pos < headers_boundary) {
         decoder->state = start_header;
+        return AWS_OP_SUCCESS;
+    } else if (current_pos == headers_boundary) {
+        decoder->state = payload_state;
         return AWS_OP_SUCCESS;
     }
 
@@ -999,7 +1040,8 @@ payload_state(struct aws_event_stream_streaming_decoder *decoder, const uint8_t 
         size_t segment_length = len > remaining_amount ? remaining_amount : len;
         int8_t final_segment = (segment_length + decoder->message_pos) ==
                                (decoder->prelude.total_len - AWS_EVENT_STREAM_TRAILER_LENGTH);
-        decoder->on_payload(decoder, data, segment_length, final_segment, decoder->user_context);
+        struct aws_byte_buf payload_buf = aws_byte_buf_from_array(data, segment_length);
+        decoder->on_payload(decoder, &payload_buf, final_segment, decoder->user_context);
         decoder->message_pos += segment_length;
         decoder->running_crc = aws_checksums_crc32(data, (int) segment_length, decoder->running_crc);
         *processed += segment_length;
@@ -1024,7 +1066,18 @@ verify_prelude_state(struct aws_event_stream_streaming_decoder *decoder, const u
 
     decoder->running_crc = aws_checksums_crc32(decoder->working_buffer, PRELUDE_CRC_OFFSET, 0);
 
-    if (decoder->running_crc == decoder->prelude.prelude_crc) {
+    if (AWS_LIKELY(decoder->running_crc == decoder->prelude.prelude_crc)) {
+
+        if (AWS_UNLIKELY(decoder->prelude.headers_len > MAX_HEADERS_SIZE ||
+                                 decoder->prelude.total_len > MAX_MESSAGE_SIZE)) {
+            aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
+            char error_message[] = "Maximum message field size exceeded";
+
+            decoder->on_error(decoder, &decoder->prelude,
+                              AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED, error_message, decoder->user_context);
+            return AWS_OP_ERR;
+        }
+
         decoder->running_crc = aws_checksums_crc32(
                 decoder->working_buffer + PRELUDE_CRC_OFFSET,
                 (int) sizeof(decoder->prelude.prelude_crc), decoder->running_crc);
@@ -1106,12 +1159,12 @@ void aws_event_stream_streaming_decoder_clean_up(struct aws_event_stream_streami
 
 /* Simply sends the data to the state machine until all has been processed or an error is returned. */
 int aws_event_stream_streaming_decoder_pump(struct aws_event_stream_streaming_decoder *decoder,
-                                            const uint8_t *data, size_t data_len) {
+                                            const struct aws_byte_buf *data) {
 
     size_t processed = 0;
     int err_val = 0;
-    while (!err_val && data && data_len && processed < data_len) {
-        err_val = decoder->state(decoder, data + processed, data_len - processed, &processed);
+    while (!err_val && data->buffer && data->len && processed < data->len) {
+        err_val = decoder->state(decoder, data->buffer + processed, data->len - processed, &processed);
     }
 
     return err_val;

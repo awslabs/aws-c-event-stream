@@ -32,10 +32,10 @@ static struct aws_allocator alloc = {
 };
 
 static void on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
-                               const uint8_t *data, size_t len, int8_t final_segment, void *user_data) {
+                               struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
 
-    if (len) {
-        fwrite(data, sizeof(uint8_t), len, stdout);
+    if (data->len) {
+        fwrite(data->buffer, sizeof(uint8_t), data->len, stdout);
     }
 
 }
@@ -60,24 +60,26 @@ static void on_header_received(struct aws_event_stream_streaming_decoder *decode
     } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BOOL_TRUE) {
         fprintf(stdout, "true");
     } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE) {
-        uint8_t int_value = header->header_value.static_val[0];
+        int8_t int_value = aws_event_stream_header_value_as_byte(header);
         fprintf(stdout, "%d", (int) int_value);
     } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT16) {
-        uint16_t int_value = aws_read_u16(header->header_value.static_val);
+        int16_t int_value = aws_event_stream_header_value_as_int16(header);
         fprintf(stdout, "%d", (int) int_value);
     } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT32) {
-        uint32_t int_value = aws_read_u32(header->header_value.static_val);
+        int32_t int_value = aws_event_stream_header_value_as_int32(header);
         fprintf(stdout, "%d", (int) int_value);
     } else if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT64 ||
                header->header_value_type == AWS_EVENT_STREAM_HEADER_TIMESTAMP) {
-        uint64_t int_value = aws_read_u64(header->header_value.static_val);
+        int64_t int_value = aws_event_stream_header_value_as_int64(header);
         fprintf(stdout, "%lld", (long long) int_value);
     } else {
         if (header->header_value_type == AWS_EVENT_STREAM_HEADER_UUID) {
-            fwrite((uint8_t *) header->header_value.static_val, sizeof(uint8_t), header->header_value_len, stdout);
+            struct aws_byte_buf uuid = aws_event_stream_header_value_as_uuid(header);
+            fwrite(uuid.buffer, sizeof(uint8_t), uuid.len, stdout);
         } else {
-            fwrite((uint8_t *) header->header_value.variable_len_val, sizeof(uint8_t), header->header_value_len,
-                   stdout);
+            struct aws_byte_buf byte_buf = aws_event_stream_header_value_as_bytebuf(header);
+
+            fwrite(byte_buf.buffer, sizeof(uint8_t), byte_buf.len, stdout);
         }
     }
     fprintf(stdout, "\n");
@@ -107,7 +109,8 @@ int main(void) {
     size_t read_val = 0;
     while ((read_val = fread(data_buffer, sizeof(uint8_t), sizeof(data_buffer), stdin))) {
         if (read_val > 0) {
-            int err_code = aws_event_stream_streaming_decoder_pump(&decoder, data_buffer, read_val);
+            struct aws_byte_buf decode_data = aws_byte_buf_from_array(data_buffer, read_val);
+            int err_code = aws_event_stream_streaming_decoder_pump(&decoder, &decode_data);
             if (err_code) {
                 fprintf(stderr, "Error occurred during parsing. Error code: %d\n", err_code);
                 aws_event_stream_streaming_decoder_clean_up(&decoder);
