@@ -1,5 +1,5 @@
-#ifndef AWS_AMAZON_FLOW_EXPORTS_H_
-#define AWS_AMAZON_FLOW_EXPORTS_H_
+#ifndef AWS_EVENT_STREAM_EXPORTS_H_
+#define AWS_EVENT_STREAM_EXPORTS_H_
 /*
 * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 *
@@ -15,13 +15,12 @@
 * permissions and limitations under the License.
 */
 #if defined (USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
-
 #ifdef USE_IMPORT_EXPORT
 #ifdef AWS_EVENT_STREAM_EXPORTS
 #define AWS_EVENT_STREAM_API __declspec(dllexport)
 #else
 #define AWS_EVENT_STREAM_API __declspec(dllimport)
-#endif /* AWS_AMAZON_FLOW_EXPORTS */
+#endif /* AWS_EVENT_STREAM_EXPORTS_H_ */
 #else
 #define AWS_EVENT_STREAM_API
 #endif // USE_IMPORT_EXPORT
@@ -29,4 +28,4 @@
 #define AWS_EVENT_STREAM_API
 #endif // defined (USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
 
-#endif /*AWS_AMAZON_FLOW_EXPORTS_H_*/
+#endif /*AWS_EVENT_STREAM_EXPORTS_H_*/

@@ -1,5 +1,5 @@
-#ifndef AWS_AMAZON_FLOW_H_
-#define AWS_AMAZON_FLOW_H_
+#ifndef AWS_EVENT_STREAM_H_
+#define AWS_EVENT_STREAM_H_
 
 /*
 * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -82,7 +82,7 @@ typedef int(*aws_event_stream_process_state_fn)(struct aws_event_stream_streamin
     const uint8_t *data, size_t len, size_t *processed);
 
 /**
- * Called by aws_amazon_flow_streaming_decoder when payload data has been received.
+ * Called by aws_aws_event_stream_streaming_decoder when payload data has been received.
  * 'data' doesn't belong to you, so copy the data if it is needed beyond the scope of your callback.
  * final_segment == 1 indicates the current data is the last payload buffer for that message.
  */
@@ -90,21 +90,21 @@ typedef void(*aws_event_stream_process_on_payload_segment)(struct aws_event_stre
     struct aws_byte_buf *payload, int8_t final_segment, void *user_data);
 
 /**
- * Called by aws_amazon_flow_streaming_decoder when a new message has arrived. The prelude will contain metadata
+ * Called by aws_aws_event_stream_streaming_decoder when a new message has arrived. The prelude will contain metadata
  * about the message. At this point no headers or payload have been received. prelude is copyable.
  */
 typedef void(*aws_event_stream_prelude_received)(struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude, void *user_data);
 
 /**
- * Called by aws_amazon_flow_streaming_decoder when a header is encountered. 'header' is not yours. Copy the data 
+ * Called by aws_aws_event_stream_streaming_decoder when a header is encountered. 'header' is not yours. Copy the data 
  * you want from it if your scope extends beyond your callback.
  */
 typedef void(*aws_event_stream_header_received)(struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude, struct aws_event_stream_header_value_pair *header, void *user_data);
 
 /**
- * Called by aws_amazon_flow_streaming_decoder when an error is encountered. The decoder is not in a good state for usage
+ * Called by aws_aws_event_stream_streaming_decoder when an error is encountered. The decoder is not in a good state for usage
  * after this callback.
  */
 typedef void(*aws_event_stream_on_error)(struct aws_event_stream_streaming_decoder *decoder,
@@ -149,7 +149,7 @@ extern "C" {
                                                                   struct aws_byte_buf *buffer);
 
     /**
-     * Allocates memory and copies buffer. Otherwise the same as aws_amazon_flow_message_from_buffer. This is slower, but possibly safer.
+     * Allocates memory and copies buffer. Otherwise the same as aws_aws_event_stream_message_from_buffer. This is slower, but possibly safer.
      */
     AWS_EVENT_STREAM_API int aws_event_stream_message_from_buffer_copy(struct aws_event_stream_message *message,
                                                                        struct aws_allocator *alloc,
@@ -157,7 +157,7 @@ extern "C" {
 
     /**
      * Cleans up any internally allocated memory. Always call this for API compatibility reasons, even if you only used the
-     * aws_amazon_flow_message_from_buffer function.
+     * aws_aws_event_stream_message_from_buffer function.
      */
     AWS_EVENT_STREAM_API void aws_event_stream_message_clean_up(struct aws_event_stream_message *message);
 
@@ -210,15 +210,16 @@ extern "C" {
 	/**
      * Initialize a streaming decoder for messages with callbacks for usage and an optional user context pointer.
      */
-    AWS_EVENT_STREAM_API void aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder, struct aws_allocator *alloc,
-                                                                        aws_event_stream_process_on_payload_segment on_payload_segment,
-                                                                        aws_event_stream_prelude_received on_prelude,
-                                                                        aws_event_stream_header_received on_header,
-                                                                        aws_event_stream_on_error on_error,
-                                                                        void *user_data);
+    AWS_EVENT_STREAM_API void aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder,
+                                                                      struct aws_allocator *alloc,
+                                                                      aws_event_stream_process_on_payload_segment on_payload_segment,
+                                                                      aws_event_stream_prelude_received on_prelude,
+                                                                      aws_event_stream_header_received on_header,
+                                                                      aws_event_stream_on_error on_error,
+                                                                      void *user_data);
 
     /**
-     * Currently, no memory is allocated inside aws_amazon_flow_streaming_decoder, but for future API compatibility, you should call this when
+     * Currently, no memory is allocated inside aws_aws_event_stream_streaming_decoder, but for future API compatibility, you should call this when
      * finished with it.
      */
     AWS_EVENT_STREAM_API void aws_event_stream_streaming_decoder_clean_up(
@@ -366,4 +367,4 @@ extern "C" {
 }
 #endif
 
-#endif /* AWS_AMAZON_FLOW_H_ */
+#endif /* AWS_EVENT_STREAM_H_ */
