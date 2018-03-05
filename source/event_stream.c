@@ -340,7 +340,7 @@ int aws_event_stream_message_from_buffer(struct aws_event_stream_message *messag
     return AWS_OP_SUCCESS;
 }
 
-//Verify buffer crcs and that length fields are reasonable. Once that is done, the buffer is copied to the message.
+/* Verify buffer crcs and that length fields are reasonable. Once that is done, the buffer is copied to the message. */
 int aws_event_stream_message_from_buffer_copy(struct aws_event_stream_message *message,
                                               struct aws_allocator *alloc,
                                               const struct aws_byte_buf *buffer) {
@@ -363,7 +363,7 @@ int aws_event_stream_message_from_buffer_copy(struct aws_event_stream_message *m
     return parse_value;
 }
 
-// if buffer is owned, release the memory.
+/* if buffer is owned, release the memory. */
 void aws_event_stream_message_clean_up(struct aws_event_stream_message *message) {
     if (message->message_buffer && message->owns_buffer) {
         aws_mem_release(message->alloc, message->message_buffer);
@@ -564,8 +564,9 @@ static int add_variable_len_header(struct aws_array_list *headers, struct aws_ev
     }
 
     if (aws_array_list_push_back(headers, (void *) header)) {
-
-        aws_mem_release(headers->alloc, (void *) header->header_value.variable_len_val);
+        if(header->value_owned) {
+            aws_mem_release(headers->alloc, (void *) header->header_value.variable_len_val);
+        }
         return AWS_OP_ERR;
     }
 
@@ -641,8 +642,7 @@ aws_event_stream_add_int32_header(struct aws_array_list *headers, const char *na
     return aws_array_list_push_back(headers, (void *) &header);
 }
 
-int
-aws_event_stream_add_int64_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int64_t value) {
+int aws_event_stream_add_int64_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int64_t value) {
     struct aws_event_stream_header_value_pair header = {
             .header_name_len = name_len,
             .header_value_len = sizeof(value),
@@ -1116,13 +1116,13 @@ static void reset_state(struct aws_event_stream_streaming_decoder *decoder) {
     decoder->state = start_state;
 }
 
-void
-aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder, struct aws_allocator *alloc,
-                                        aws_event_stream_process_on_payload_segment on_payload_segment,
-                                        aws_event_stream_prelude_received on_prelude,
-                                        aws_event_stream_header_received on_header,
-                                        aws_event_stream_on_error on_error,
-                                        void *user_data) {
+void aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder,
+                                             struct aws_allocator *alloc,
+                                             aws_event_stream_process_on_payload_segment on_payload_segment,
+                                             aws_event_stream_prelude_received on_prelude,
+                                             aws_event_stream_header_received on_header,
+                                             aws_event_stream_on_error on_error,
+                                             void *user_data) {
 
     reset_state(decoder);
     decoder->alloc = alloc;
