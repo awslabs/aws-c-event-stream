@@ -18,21 +18,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-static void *mem_acquire_malloc(struct aws_allocator *alloc, size_t size) {
-    return malloc(size);
-}
+static struct aws_allocator *alloc = NULL;
 
-static void mem_release_free(struct aws_allocator *alloc, void *ptr) {
-    free(ptr);
-}
-
-static struct aws_allocator alloc = {
-        .mem_acquire = mem_acquire_malloc,
-        .mem_release = mem_release_free
-};
-
-static void on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
-                               struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
+static void s_on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
+                                 struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
 
     if (data->len) {
         fwrite(data->buffer, sizeof(uint8_t), data->len, stdout);
@@ -40,17 +29,17 @@ static void on_payload_segment(struct aws_event_stream_streaming_decoder *decode
 
 }
 
-static void on_prelude_received(struct aws_event_stream_streaming_decoder *decoder,
-                                struct aws_event_stream_message_prelude *prelude, void *user_data) {
+static void s_on_prelude_received(struct aws_event_stream_streaming_decoder *decoder,
+                                  struct aws_event_stream_message_prelude *prelude, void *user_data) {
 
     fprintf(stdout, "\n--------------------------------------------------------------------------------\n");
     fprintf(stdout, "total_length = 0x%08" PRIx32 "\nheaders_len = 0x%08" PRIx32 "\nprelude_crc = 0x%08" PRIx32 "\n\n",
             prelude->total_len, prelude->headers_len, prelude->prelude_crc);
 }
 
-static void on_header_received(struct aws_event_stream_streaming_decoder *decoder,
-                               struct aws_event_stream_message_prelude *prelude,
-                               struct aws_event_stream_header_value_pair *header, void *user_data) {
+static void s_on_header_received(struct aws_event_stream_streaming_decoder *decoder,
+                                 struct aws_event_stream_message_prelude *prelude,
+                                 struct aws_event_stream_header_value_pair *header, void *user_data) {
     fwrite(header->header_name, sizeof(uint8_t), (size_t) header->header_name_len, stdout);
 
     fprintf(stdout, ": ");
@@ -85,9 +74,9 @@ static void on_header_received(struct aws_event_stream_streaming_decoder *decode
     fprintf(stdout, "\n");
 }
 
-static void on_error(struct aws_event_stream_streaming_decoder *decoder,
-                     struct aws_event_stream_message_prelude *prelude, int error_code, const char *message,
-                     void *user_data) {
+static void s_on_error(struct aws_event_stream_streaming_decoder *decoder,
+                       struct aws_event_stream_message_prelude *prelude, int error_code, const char *message,
+                       void *user_data) {
 
     fprintf(stderr, "Error encountered: Code: %d, Error Str: %s, Message: %s\n", error_code,
             aws_error_debug_str(error_code), message);
@@ -98,10 +87,11 @@ int main(void) {
 
     aws_load_error_strings();
     aws_event_stream_load_error_strings();
+    alloc = aws_default_allocator();
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(&decoder, &alloc, on_payload_segment, on_prelude_received,
-                                            on_header_received, on_error, NULL);
+    aws_event_stream_streaming_decoder_init(&decoder, alloc, s_on_payload_segment, s_on_prelude_received,
+                                            s_on_header_received, s_on_error, NULL);
 
     setvbuf(stdin, NULL, _IONBF, 0);
 

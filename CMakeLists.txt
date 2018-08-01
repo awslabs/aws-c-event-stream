@@ -11,7 +11,12 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 cmake_minimum_required (VERSION 3.1)
-project (aws-c-event-stream)
+project (aws-c-event-stream C)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_INSTALL_PREFIX}/lib/cmake")
+include(AwsCFlags)
+include(Sanitizers)
+include(CheckCCompilerFlag)
 
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -50,28 +55,8 @@ find_package(aws-c-common)
 find_package(aws-checksums)
 
 add_library(${CMAKE_PROJECT_NAME} ${EVENT_STREAM_HEADERS} ${EVENT_STREAM_SRC})
-
-if(BUILD_SHARED_LIBS)
-    if(WIN32)
-        target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC -DUSE_IMPORT_EXPORT)
-		target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DAWS_EVENT_STREAM_EXPORTS)
-	endif()
-endif()
-
-set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES LINKER_LANGUAGE C)
-set(CMAKE_C_FLAGS_DEBUGOPT "")
-set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY C_STANDARD 99)
-
-if(BUILD_JNI_BINDINGS)
-    find_package(JNI)
-    include_directories(${JNI_INCLUDE_DIRS})
-	set(PLATFORM_LIBS ${PLATFORM_LIBS} ${JNI_LIBRARIES})
-	target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DBUILD_JNI_BINDINGS)
-endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL "" OR CMAKE_BUILD_TYPE MATCHES DEBUG)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DDEBUG_BUILD)
-endif()
+aws_set_common_properties(${CMAKE_PROJECT_NAME})
+aws_add_sanitizers(${CMAKE_PROJECT_NAME})
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

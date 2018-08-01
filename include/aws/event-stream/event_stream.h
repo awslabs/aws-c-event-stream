@@ -20,10 +20,10 @@
 #include <aws/common/array_list.h>
 #include <aws/common/byte_buf.h>
 
-#include <stdint.h>
+#include <stdio.h>
 
 
-typedef enum aws_event_stream_errors {
+enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = 0x1000,
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
     AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED,
@@ -32,7 +32,7 @@ typedef enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN,
     AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE,
     AWS_ERROR_EVENT_STREAM_MESSAGE_PARSER_ILLEGAL_STATE,
-} aws_event_stream_errors;
+};
 
 struct aws_event_stream_message_prelude {
     uint32_t total_len;
@@ -50,7 +50,7 @@ struct aws_event_stream_message {
 
 #define AWS_EVENT_STREAM_TRAILER_LENGTH (sizeof(uint32_t))
 
-typedef enum aws_event_stream_header_value_type {
+enum aws_event_stream_header_value_type {
     AWS_EVENT_STREAM_HEADER_BOOL_TRUE = 0,
     AWS_EVENT_STREAM_HEADER_BOOL_FALSE,
     AWS_EVENT_STREAM_HEADER_BYTE,
@@ -62,14 +62,14 @@ typedef enum aws_event_stream_header_value_type {
     /* 64 bit integer (millis since epoch) */
     AWS_EVENT_STREAM_HEADER_TIMESTAMP,
     AWS_EVENT_STREAM_HEADER_UUID
-} aws_event_stream_header_value_type;
+} ;
 
 struct aws_event_stream_header_value_pair {
     uint8_t header_name_len;
-    const char header_name[INT8_MAX];
-    aws_event_stream_header_value_type header_value_type;
+    char header_name[INT8_MAX];
+    enum aws_event_stream_header_value_type header_value_type;
     union {
-        const uint8_t *variable_len_val;
+        uint8_t *variable_len_val;
         uint8_t static_val[16];
     } header_value;
 
@@ -78,7 +78,7 @@ struct aws_event_stream_header_value_pair {
 };
 
 struct aws_event_stream_streaming_decoder;
-typedef int(*aws_event_stream_process_state_fn)(struct aws_event_stream_streaming_decoder *decoder,
+typedef int(aws_event_stream_process_state_fn)(struct aws_event_stream_streaming_decoder *decoder,
     const uint8_t *data, size_t len, size_t *processed);
 
 /**
@@ -86,28 +86,28 @@ typedef int(*aws_event_stream_process_state_fn)(struct aws_event_stream_streamin
  * 'data' doesn't belong to you, so copy the data if it is needed beyond the scope of your callback.
  * final_segment == 1 indicates the current data is the last payload buffer for that message.
  */
-typedef void(*aws_event_stream_process_on_payload_segment)(struct aws_event_stream_streaming_decoder *decoder,
+typedef void(aws_event_stream_process_on_payload_segment_fn)(struct aws_event_stream_streaming_decoder *decoder,
     struct aws_byte_buf *payload, int8_t final_segment, void *user_data);
 
 /**
  * Called by aws_aws_event_stream_streaming_decoder when a new message has arrived. The prelude will contain metadata
  * about the message. At this point no headers or payload have been received. prelude is copyable.
  */
-typedef void(*aws_event_stream_prelude_received)(struct aws_event_stream_streaming_decoder *decoder,
+typedef void(aws_event_stream_prelude_received_fn)(struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude, void *user_data);
 
 /**
  * Called by aws_aws_event_stream_streaming_decoder when a header is encountered. 'header' is not yours. Copy the data 
  * you want from it if your scope extends beyond your callback.
  */
-typedef void(*aws_event_stream_header_received)(struct aws_event_stream_streaming_decoder *decoder,
+typedef void(aws_event_stream_header_received_fn)(struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude, struct aws_event_stream_header_value_pair *header, void *user_data);
 
 /**
  * Called by aws_aws_event_stream_streaming_decoder when an error is encountered. The decoder is not in a good state for usage
  * after this callback.
  */
-typedef void(*aws_event_stream_on_error)(struct aws_event_stream_streaming_decoder *decoder,
+typedef void(aws_event_stream_on_error_fn)(struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude, int error_code, const char *message, void *user_data);
 
 
@@ -120,11 +120,11 @@ struct AWS_CACHE_ALIGN aws_event_stream_streaming_decoder {
     size_t current_header_value_offset;
     struct aws_event_stream_header_value_pair current_header;
     struct aws_event_stream_message_prelude prelude;
-    aws_event_stream_process_state_fn state;
-    aws_event_stream_process_on_payload_segment on_payload;
-    aws_event_stream_prelude_received on_prelude;
-    aws_event_stream_header_received on_header;
-    aws_event_stream_on_error on_error;
+    aws_event_stream_process_state_fn *state;
+    aws_event_stream_process_on_payload_segment_fn *on_payload;
+    aws_event_stream_prelude_received_fn *on_prelude;
+    aws_event_stream_header_received_fn *on_header;
+    aws_event_stream_on_error_fn *on_error;
     void *user_context;
 };
 
@@ -212,10 +212,10 @@ extern "C" {
      */
     AWS_EVENT_STREAM_API void aws_event_stream_streaming_decoder_init(struct aws_event_stream_streaming_decoder *decoder,
                                                                       struct aws_allocator *alloc,
-                                                                      aws_event_stream_process_on_payload_segment on_payload_segment,
-                                                                      aws_event_stream_prelude_received on_prelude,
-                                                                      aws_event_stream_header_received on_header,
-                                                                      aws_event_stream_on_error on_error,
+                                                                      aws_event_stream_process_on_payload_segment_fn *on_payload_segment,
+                                                                      aws_event_stream_prelude_received_fn *on_prelude,
+                                                                      aws_event_stream_header_received_fn *on_header,
+                                                                      aws_event_stream_on_error_fn *on_error,
                                                                       void *user_data);
 
     /**

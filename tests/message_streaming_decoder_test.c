@@ -26,15 +26,15 @@ struct test_decoder_data {
     int latest_error;
 };
 
-static void decoder_test_on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
-                                            struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
+static void s_decoder_test_on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
+                                              struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
     struct test_decoder_data *decoder_data = (struct test_decoder_data *) user_data;
     memcpy(decoder_data->latest_payload + decoder_data->written, data->buffer, data->len);
     decoder_data->written += data->len;
 }
 
-static void decider_test_on_prelude_received(struct aws_event_stream_streaming_decoder *decoder,
-                                             struct aws_event_stream_message_prelude *prelude, void *user_data) {
+static void s_decoder_test_on_prelude_received(struct aws_event_stream_streaming_decoder *decoder,
+                                               struct aws_event_stream_message_prelude *prelude, void *user_data) {
 
     struct test_decoder_data *decoder_data = (struct test_decoder_data *) user_data;
     decoder_data->latest_prelude = *prelude;
@@ -51,9 +51,9 @@ static void decider_test_on_prelude_received(struct aws_event_stream_streaming_d
     decoder_data->written = 0;
 }
 
-static void decider_test_header_received(struct aws_event_stream_streaming_decoder *decoder,
-                                         struct aws_event_stream_message_prelude *prelude,
-                                         struct aws_event_stream_header_value_pair *header, void *user_data) {
+static void s_decoder_test_header_received(struct aws_event_stream_streaming_decoder *decoder,
+                                           struct aws_event_stream_message_prelude *prelude,
+                                           struct aws_event_stream_header_value_pair *header, void *user_data) {
     struct test_decoder_data *decoder_data = (struct test_decoder_data *) user_data;
     memset(decoder_data->latest_header_name, 0, sizeof(decoder_data->latest_header_name));
     memcpy(decoder_data->latest_header_name, header->header_name, (size_t) header->header_name_len);
@@ -61,15 +61,16 @@ static void decider_test_header_received(struct aws_event_stream_streaming_decod
     memcpy(decoder_data->latest_header_value, header->header_value.variable_len_val, header->header_value_len);
 }
 
-static void decider_test_on_error(struct aws_event_stream_streaming_decoder *decoder,
-                                  struct aws_event_stream_message_prelude *prelude, int error_code, const char *message,
-                                  void *user_data) {
+static void s_decoder_test_on_error(struct aws_event_stream_streaming_decoder *decoder,
+                                    struct aws_event_stream_message_prelude *prelude, int error_code,
+                                    const char *message,
+                                    void *user_data) {
 
     struct test_decoder_data *decoder_data = (struct test_decoder_data *) user_data;
     decoder_data->latest_error = error_code;
 }
 
-static int test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct aws_allocator *alloc, void *ctx) {
+static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct aws_allocator *alloc, void *ctx) {
     uint8_t test_data[] = {0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
                            0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
 
@@ -81,9 +82,9 @@ static int test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct 
     };
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(&decoder, alloc, decoder_test_on_payload_segment,
-                                            decider_test_on_prelude_received,
-                                            decider_test_header_received, decider_test_on_error, &decoder_data);
+    aws_event_stream_streaming_decoder_init(&decoder, alloc, s_decoder_test_on_payload_segment,
+                                            s_decoder_test_on_prelude_received,
+                                            s_decoder_test_header_received, s_decoder_test_on_error, &decoder_data);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
     ASSERT_SUCCESS(aws_event_stream_streaming_decoder_pump(&decoder, &test_buf),
@@ -105,9 +106,9 @@ static int test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct 
 }
 
 AWS_TEST_CASE(test_streaming_decoder_incoming_no_op_valid_single_message,
-              test_streaming_decoder_incoming_no_op_valid_single_message_fn)
+              s_test_streaming_decoder_incoming_no_op_valid_single_message_fn)
 
-static int test_streaming_decoder_incoming_application_no_headers_fn(struct aws_allocator *alloc, void *ctx) {
+static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aws_allocator *alloc, void *ctx) {
     uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x00, 0xfd, 0x52, 0x8c, 0x5a, 0x7b,
                            0x27, 0x66, 0x6f, 0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0xc3, 0x65, 0x39,
                            0x36};
@@ -120,9 +121,9 @@ static int test_streaming_decoder_incoming_application_no_headers_fn(struct aws_
     };
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(&decoder, alloc, decoder_test_on_payload_segment,
-                                            decider_test_on_prelude_received,
-                                            decider_test_header_received, decider_test_on_error, &decoder_data);
+    aws_event_stream_streaming_decoder_init(&decoder, alloc, s_decoder_test_on_payload_segment,
+                                            s_decoder_test_on_prelude_received,
+                                            s_decoder_test_header_received, s_decoder_test_on_error, &decoder_data);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
@@ -154,10 +155,11 @@ static int test_streaming_decoder_incoming_application_no_headers_fn(struct aws_
 }
 
 AWS_TEST_CASE(test_streaming_decoder_incoming_application_no_headers,
-              test_streaming_decoder_incoming_application_no_headers_fn)
+              s_test_streaming_decoder_incoming_application_no_headers_fn)
 
-static int test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn(struct aws_allocator *alloc,
-                                                                                           void *ctx) {
+static int s_test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn(
+        struct aws_allocator *alloc,
+        void *ctx) {
     uint8_t test_data[] = {0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x20, 0x07, 0xFD, 0x83, 0x96,
                            0x0C, 'c', 'o', 'n', 't', 'e', 'n', 't', '-', 't', 'y', 'p', 'e',
                            0x07, 0x00, 0x10, 'a', 'p', 'p', 'l', 'i', 'c', 'a', 't', 'i', 'o', 'n', '/', 'j', 's', 'o',
@@ -173,9 +175,9 @@ static int test_streaming_decoder_incoming_application_one_compressed_header_pai
     };
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(&decoder, alloc, decoder_test_on_payload_segment,
-                                            decider_test_on_prelude_received,
-                                            decider_test_header_received, decider_test_on_error, &decoder_data);
+    aws_event_stream_streaming_decoder_init(&decoder, alloc, s_decoder_test_on_payload_segment,
+                                            s_decoder_test_on_prelude_received,
+                                            s_decoder_test_header_received, s_decoder_test_on_error, &decoder_data);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
@@ -216,9 +218,9 @@ static int test_streaming_decoder_incoming_application_one_compressed_header_pai
 }
 
 AWS_TEST_CASE(test_streaming_decoder_incoming_application_one_compressed_header_pair_valid,
-              test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn)
+              s_test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn)
 
-static int test_streaming_decoder_incoming_multiple_messages_fn(struct aws_allocator *alloc, void *ctx) {
+static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_allocator *alloc, void *ctx) {
     uint8_t test_data[] = {
             /* message 1 */
             0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
@@ -242,9 +244,9 @@ static int test_streaming_decoder_incoming_multiple_messages_fn(struct aws_alloc
     };
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(&decoder, alloc, decoder_test_on_payload_segment,
-                                            decider_test_on_prelude_received,
-                                            decider_test_header_received, decider_test_on_error, &decoder_data);
+    aws_event_stream_streaming_decoder_init(&decoder, alloc, s_decoder_test_on_payload_segment,
+                                            s_decoder_test_on_prelude_received,
+                                            s_decoder_test_header_received, s_decoder_test_on_error, &decoder_data);
 
     size_t current_written = 0;
     int err_code = 0;
@@ -311,4 +313,4 @@ static int test_streaming_decoder_incoming_multiple_messages_fn(struct aws_alloc
 }
 
 AWS_TEST_CASE(test_streaming_decoder_incoming_multiple_messages,
-              test_streaming_decoder_incoming_multiple_messages_fn)
+              s_test_streaming_decoder_incoming_multiple_messages_fn)
