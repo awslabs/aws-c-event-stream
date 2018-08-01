@@ -27,8 +27,8 @@ cd ..
 #build aws-c-common
 git clone https://github.com/awslabs/aws-c-common.git
 mkdir common-build && cd common-build
-cmake ../aws-c-common
-make && make test
+cmake -DCMAKE_INSTALL_PREFIX=../install ../aws-c-common
+make && make test && make install
 cd ..
 
 #build aws-c-event-stream
@@ -36,5 +36,5 @@ cd $PROJECT_DIR
 cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../aws-c-common/include --force --error-exitcode=-1 ./
 cd ..
 mkdir build && cd build
-cmake -Daws-checksums_DIR="../checksums-build" -Daws-c-common_DIR="../common-build" $PROJECT_DIR
+cmake -Daws-checksums_DIR="../checksums-build" -DCMAKE_INSTALL_PREFIX=../install $PROJECT_DIR
 make && make test
