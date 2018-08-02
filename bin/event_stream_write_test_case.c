@@ -14,23 +14,12 @@
 */
 
 #include <aws/event-stream/event_stream.h>
+
 #include <aws/common/encoding.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-static void *mem_acquire_malloc(struct aws_allocator *alloc, size_t size) {
-    return malloc(size);
-}
-
-static void mem_release_free(struct aws_allocator *alloc, void *ptr) {
-    free(ptr);
-}
-
-static struct aws_allocator alloc = {
-        .mem_acquire = mem_acquire_malloc,
-        .mem_release = mem_release_free
-};
 
 #ifdef _WIN32
 #define DELIM  "\\"
@@ -118,17 +107,18 @@ write_positive_test_case(const char *root_dir, const char *test_name, struct aws
 
 int main(int argc, char *argv[]) {
     struct aws_array_list headers;
-    aws_event_stream_headers_list_init(&headers, &alloc);
+    struct aws_allocator *alloc = aws_default_allocator();
+    aws_event_stream_headers_list_init(&headers, alloc);
 
     struct aws_event_stream_message msg;
-    aws_event_stream_message_init(&msg, &alloc, &headers, NULL);
+    aws_event_stream_message_init(&msg, alloc, &headers, NULL);
 
     write_positive_test_case(".", "empty_message", &msg);
 
-    struct aws_byte_buf payload = aws_byte_buf_from_literal("{'foo':'bar'}");
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("{'foo':'bar'}");
 
     aws_event_stream_message_clean_up(&msg);
-    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
+    aws_event_stream_message_init(&msg, alloc, &headers, &payload);
 
     write_positive_test_case(".", "payload_no_headers", &msg);
     aws_event_stream_message_clean_up(&msg);
@@ -137,22 +127,22 @@ int main(int argc, char *argv[]) {
     static const char json[] = "application/json";
 
     aws_event_stream_add_string_header(&headers, content_type, sizeof(content_type) - 1, json, sizeof(json) - 1, 0);
-    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
+    aws_event_stream_message_init(&msg, alloc, &headers, &payload);
 
     write_positive_test_case(".", "payload_one_str_header", &msg);
 
     /* corrupt length */
     uint32_t original_length = aws_event_stream_message_total_length(&msg);
-    uint8_t *buffer_cpy = aws_mem_acquire(&alloc, original_length);
+    uint8_t *buffer_cpy = aws_mem_acquire(alloc, original_length);
     memcpy(buffer_cpy, aws_event_stream_message_buffer(&msg), original_length);
     aws_write_u32(buffer_cpy, original_length + 1);
 
     write_negative_test_case(".", "corrupted_length", buffer_cpy, original_length, "Prelude checksum mismatch");
-    aws_mem_release(&alloc, buffer_cpy);
+    aws_mem_release(alloc, buffer_cpy);
 
 
     /* corrupt header length */
-    buffer_cpy = aws_mem_acquire(&alloc, original_length);
+    buffer_cpy = aws_mem_acquire(alloc, original_length);
     memcpy(buffer_cpy, aws_event_stream_message_buffer(&msg), original_length);
 
     uint32_t original_hdr_len = aws_event_stream_message_headers_len(&msg);
@@ -161,10 +151,10 @@ int main(int argc, char *argv[]) {
 
     write_negative_test_case(".", "corrupted_header_len", buffer_cpy, original_length,
                              "Prelude checksum mismatch");
-    aws_mem_release(&alloc, buffer_cpy);
+    aws_mem_release(alloc, buffer_cpy);
 
     /* corrupt headers */
-    buffer_cpy = aws_mem_acquire(&alloc, original_length);
+    buffer_cpy = aws_mem_acquire(alloc, original_length);
     memcpy(buffer_cpy, aws_event_stream_message_buffer(&msg), original_length);
 
     uint32_t hdr_len = aws_event_stream_message_headers_len(&msg);
@@ -173,15 +163,15 @@ int main(int argc, char *argv[]) {
 
     write_negative_test_case(".", "corrupted_headers", buffer_cpy, original_length,
                              "Message checksum mismatch");
-    aws_mem_release(&alloc, buffer_cpy);
+    aws_mem_release(alloc, buffer_cpy);
 
 
-    buffer_cpy = aws_mem_acquire(&alloc, original_length);
+    buffer_cpy = aws_mem_acquire(alloc, original_length);
     memcpy(buffer_cpy, aws_event_stream_message_buffer(&msg), original_length);
     aws_event_stream_message_clean_up(&msg);
 
     /* corrupt payload */
-    aws_event_stream_message_init(&msg, &alloc, NULL, &payload);
+    aws_event_stream_message_init(&msg, alloc, NULL, &payload);
     ((uint8_t *) aws_event_stream_message_payload(&msg))[0] = '[';
     write_negative_test_case(".", "corrupted_payload", aws_event_stream_message_buffer(&msg),
                              aws_event_stream_message_total_length(&msg),
@@ -194,7 +184,7 @@ int main(int argc, char *argv[]) {
 
     aws_array_list_clear(&headers);
     aws_event_stream_add_int32_header(&headers, event_type, sizeof(event_type) - 1, 0x0000A00C);
-    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
+    aws_event_stream_message_init(&msg, alloc, &headers, &payload);
 
     write_positive_test_case(".", "int32_header", &msg);
     aws_event_stream_message_clean_up(&msg);
@@ -234,13 +224,13 @@ int main(int argc, char *argv[]) {
     static const uint8_t uuid[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
     aws_event_stream_add_uuid_header(&headers, uuid_hdr, sizeof(uuid_hdr) - 1, (uint8_t *) uuid);
-    aws_event_stream_message_init(&msg, &alloc, &headers, &payload);
+    aws_event_stream_message_init(&msg, alloc, &headers, &payload);
 
     struct aws_event_stream_message sanity_check_message;
     struct aws_byte_buf message_buffer = aws_byte_buf_from_array(aws_event_stream_message_buffer(&msg),
                                                                  aws_event_stream_message_total_length(&msg));
 
-    int err = aws_event_stream_message_from_buffer(&sanity_check_message, &alloc,
+    int err = aws_event_stream_message_from_buffer(&sanity_check_message, alloc,
                                                    &message_buffer);
 
     if (err) {
