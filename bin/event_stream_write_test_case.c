@@ -21,8 +21,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static struct aws_allocator *alloc = NULL;
-
 #ifdef _WIN32
 #define DELIM  "\\"
 #else
@@ -109,7 +107,7 @@ write_positive_test_case(const char *root_dir, const char *test_name, struct aws
 
 int main(int argc, char *argv[]) {
     struct aws_array_list headers;
-    alloc = aws_default_allocator();
+    struct aws_allocator *alloc = aws_default_allocator();
     aws_event_stream_headers_list_init(&headers, alloc);
 
     struct aws_event_stream_message msg;

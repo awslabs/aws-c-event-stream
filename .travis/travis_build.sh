@@ -33,7 +33,7 @@ cd ..
 
 #build aws-c-event-stream
 cd $PROJECT_DIR
-cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../aws-c-common/include --force --error-exitcode=-1 ./
+cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../install/include --force --error-exitcode=-1 ./
 cd ..
 mkdir build && cd build
 cmake -Daws-checksums_DIR="../checksums-build" -DCMAKE_INSTALL_PREFIX=../install $PROJECT_DIR

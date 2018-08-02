@@ -18,8 +18,6 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-static struct aws_allocator *alloc = NULL;
-
 static void s_on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
                                  struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
 
@@ -87,7 +85,7 @@ int main(void) {
 
     aws_load_error_strings();
     aws_event_stream_load_error_strings();
-    alloc = aws_default_allocator();
+    struct aws_allocator *alloc = aws_default_allocator();
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(&decoder, alloc, s_on_payload_segment, s_on_prelude_received,
