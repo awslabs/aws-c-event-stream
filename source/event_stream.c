@@ -168,7 +168,8 @@ int get_headers_from_buffer(struct aws_array_list *headers,
     /* iterate the buffer per header. */
     const uint8_t *buffer_start = buffer;
     while ((size_t) (buffer - buffer_start) < headers_len) {
-        struct aws_event_stream_header_value_pair header = {0};
+        struct aws_event_stream_header_value_pair header;
+        AWS_ZERO_STRUCT(header);
 
         /* get the header info from the buffer, make sure to increment buffer offset. */
         header.header_name_len = *buffer;
