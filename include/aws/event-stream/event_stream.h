@@ -22,6 +22,11 @@
 
 #include <stdio.h>
 
+/* turn off "structure was padded due to alignment specifier" warning on msvc.*/
+#ifdef _MSC_VER 
+#pragma warning( push )
+#pragma warning( disable : 4324)
+#endif
 
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = 0x1000,
@@ -366,5 +371,9 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+#if _MSC_VER
+#pragma warning(pop)
+#endif /* _MSC_VER */
 
 #endif /* AWS_EVENT_STREAM_H_ */

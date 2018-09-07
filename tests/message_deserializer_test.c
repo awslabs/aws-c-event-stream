@@ -16,6 +16,12 @@
 #include <aws/event-stream/event_stream.h>
 #include <aws/testing/aws_test_harness.h>
 
+/* turn off unused named parameter warning on msvc.*/
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4100)
+#endif
+
 static int s_test_outgoing_no_op_valid_fn(struct aws_allocator *alloc, void *ctx) {
     uint8_t test_data[] = {0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
                            0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
@@ -139,3 +145,7 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
 
 AWS_TEST_CASE(test_outgoing_application_one_compressed_header_pair_valid,
               s_test_outgoing_application_one_compressed_header_pair_valid_fn)
+
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif

@@ -14,8 +14,8 @@
 * express or implied. See the License for the specific language governing
 * permissions and limitations under the License.
 */
-#if defined (USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
-#ifdef USE_IMPORT_EXPORT
+#if defined (AWS_C_RT_USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
+#ifdef AWS_COMMON_USE_IMPORT_EXPORT
 #ifdef AWS_EVENT_STREAM_EXPORTS
 #define AWS_EVENT_STREAM_API __declspec(dllexport)
 #else
@@ -23,9 +23,9 @@
 #endif /* AWS_EVENT_STREAM_EXPORTS_H_ */
 #else
 #define AWS_EVENT_STREAM_API
-#endif // USE_IMPORT_EXPORT
-#else // defined (USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
+#endif // AWS_COMMON_USE_IMPORT_EXPORT
+#else // defined (AWS_C_RT_USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
 #define AWS_EVENT_STREAM_API
-#endif // defined (USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
+#endif // defined (AWS_C_RT_USE_WINDOWS_DLL_SEMANTICS) || defined (WIN32)
 
 #endif /*AWS_EVENT_STREAM_EXPORTS_H_*/

@@ -16,6 +16,13 @@
 #include <aws/event-stream/event_stream.h>
 #include <aws/testing/aws_test_harness.h>
 
+#ifdef _MSC_VER
+/* disable warning about fopen() this is just a test */
+#    pragma warning(disable : 4996)
+/* disable warning about unreferenced formal parameter */
+#    pragma warning(disable : 4100)
+#endif
+
 struct test_decoder_data {
     struct aws_event_stream_message_prelude latest_prelude;
     char latest_header_name[100];
