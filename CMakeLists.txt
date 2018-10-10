@@ -51,10 +51,7 @@ file(GLOB EVENT_STREAM_SRC
     ${AWS_EVENT_STREAM_SRC}
 )
 
-find_package(aws-c-common)
-find_package(aws-checksums)
-
-add_library(${CMAKE_PROJECT_NAME} ${EVENT_STREAM_HEADERS} ${EVENT_STREAM_SRC})
+add_library(${CMAKE_PROJECT_NAME} ${EVENT_STREAM_SRC})
 aws_set_common_properties(${CMAKE_PROJECT_NAME})
 aws_add_sanitizers(${CMAKE_PROJECT_NAME})
 
@@ -62,18 +59,39 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} aws-c-common aws-checksums)
+find_package(aws-c-common)
+find_package(aws-checksums)
+
+target_link_libraries(${CMAKE_PROJECT_NAME} 
+    AWS::aws-c-common
+    AWS::aws-checksums)
+
+# installation & packaging
+set(LIBRARY_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib)
 
 install (FILES ${AWS_EVENT_STREAM_HEADERS} DESTINATION "include/aws/event-stream")
-install (
-         TARGETS ${PROJECT_NAME} EXPORT  ${PROJECT_NAME}-config
-         ARCHIVE DESTINATION lib
-         LIBRARY DESTINATION lib
-         COMPONENT library     
-)
+install (TARGETS ${CMAKE_PROJECT_NAME}
+    EXPORT ${CMAKE_PROJECT_NAME}-targets
+    ARCHIVE DESTINATION ${LIBRARY_DIRECTORY}
+    LIBRARY DESTINATION ${LIBRARY_DIRECTORY}
+    INCLUDES DESTINATION include)
 
-export(TARGETS ${CMAKE_PROJECT_NAME} FILE "${CMAKE_PROJECT_NAME}-config.cmake")
-install(EXPORT ${CMAKE_PROJECT_NAME}-config DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_PROJECT_NAME}/cmake/")
+export(EXPORT ${CMAKE_PROJECT_NAME}-targets
+    FILE "${CMAKE_PROJECT_NAME}-targets.cmake"
+    NAMESPACE AWS::)
+
+configure_file("cmake/${CMAKE_PROJECT_NAME}-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}-config.cmake"
+    @ONLY)
+
+install(EXPORT "${CMAKE_PROJECT_NAME}-targets"
+    FILE "${CMAKE_PROJECT_NAME}-targets.cmake"
+    DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/"
+    NAMESPACE AWS::)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}-config.cmake"
+    DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/")
+
 
 include(CTest)
 add_subdirectory(tests)
