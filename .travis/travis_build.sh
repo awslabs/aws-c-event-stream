@@ -15,19 +15,21 @@
 set -e
 
 PROJECT_DIR=`pwd`
+INSTALL_DIR=$PROJECT_DIR/out
+mkdir $INSTALL_DIR
 cd ..
 
 #build checksums
 git clone https://github.com/awslabs/aws-checksums.git
 mkdir checksums-build && cd checksums-build
-cmake ../aws-checksums
-make && make test
+cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR ../aws-checksums
+make && make test && make install
 cd ..
 
 #build aws-c-common
 git clone https://github.com/awslabs/aws-c-common.git
 mkdir common-build && cd common-build
-cmake -DCMAKE_INSTALL_PREFIX=../install ../aws-c-common
+cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR ../aws-c-common
 make && make test && make install
 cd ..
 
@@ -36,5 +38,5 @@ cd $PROJECT_DIR
 cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../install/include --force --error-exitcode=-1 ./
 cd ..
 mkdir build && cd build
-cmake -Daws-checksums_DIR="../checksums-build" -DCMAKE_INSTALL_PREFIX=../install $PROJECT_DIR
-make && make test
+cmake -DCMAKE_PREFIX_PATH=$INSTALL_DIR -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR $PROJECT_DIR ..
+make && make test && make install
