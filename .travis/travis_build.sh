@@ -34,8 +34,6 @@ make && make test && make install
 cd ..
 
 #build aws-c-event-stream
-cd $PROJECT_DIR
-cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../install/include --force --error-exitcode=-1 ./
-cd build
+cd $PROJECT_DIR/build
 cmake -DCMAKE_PREFIX_PATH=$INSTALL_DIR -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR $PROJECT_DIR ..
 make && make test && make install
