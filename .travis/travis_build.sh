@@ -12,31 +12,30 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 #
-set -e
+set -ex
 
 PROJECT_DIR=`pwd`
 INSTALL_DIR=$PROJECT_DIR/out
 mkdir $INSTALL_DIR
-cd ..
+mkdir build; cd build
 
 #build checksums
 git clone https://github.com/awslabs/aws-checksums.git
-mkdir checksums-build && cd checksums-build
-cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR ../aws-checksums
+cd aws-checksums && mkdir checksums-build && cd checksums-build
+cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR -DCMAKE_BUILD_TYPE=Debug ..
 make && make test && make install
 cd ..
 
 #build aws-c-common
 git clone https://github.com/awslabs/aws-c-common.git
-mkdir common-build && cd common-build
-cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR ../aws-c-common
+cd aws-c-common && mkdir common-build && cd common-build
+cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR -DCMAKE_BUILD_TYPE=Debug ..
 make && make test && make install
 cd ..
 
 #build aws-c-event-stream
 cd $PROJECT_DIR
 cppcheck --enable=all --std=c99 --language=c --suppress=unusedFunction -I include ../aws-checksums/include ../install/include --force --error-exitcode=-1 ./
-cd ..
-mkdir build && cd build
+cd build
 cmake -DCMAKE_PREFIX_PATH=$INSTALL_DIR -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR $PROJECT_DIR ..
 make && make test && make install
