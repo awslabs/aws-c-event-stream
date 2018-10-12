@@ -15,7 +15,7 @@
 
 #include <aws/event-stream/event_stream.h>
 
-#include <aws/checksums/aws_crc.h>
+#include <aws/checksums/crc.h>
 
 #include <aws/common/encoding.h>
 
