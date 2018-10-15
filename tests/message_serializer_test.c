@@ -16,6 +16,12 @@
 #include <aws/testing/aws_test_harness.h>
 #include <aws/common/encoding.h>
 
+/* turn off unused named parameter warning on msvc.*/
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4100)
+#endif
+
 static int s_test_incoming_no_op_valid_fn(struct aws_allocator *alloc, void *ctx) {
     uint8_t expected_data[] = {0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
                                0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
@@ -131,3 +137,7 @@ static int s_test_incoming_application_int32_header_valid_fn(struct aws_allocato
 }
 
 AWS_TEST_CASE(test_incoming_application_int32_header_valid, s_test_incoming_application_int32_header_valid_fn)
+
+#ifdef _MSC_VER
+#    pragma warning(pop)
+#endif

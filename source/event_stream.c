@@ -29,6 +29,11 @@
 #define MAX_HEADERS_SIZE (128 * 1024)
 #define LIB_NAME "libaws-c-event-stream"
 
+#if _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4204) /*Disable "conditional expression is constant" */
+#endif  
+
 static struct aws_error_info s_errors[] = {
         AWS_DEFINE_ERROR_INFO( AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH,
                               "Buffer length mismatch", LIB_NAME),
@@ -1167,3 +1172,7 @@ int aws_event_stream_streaming_decoder_pump(struct aws_event_stream_streaming_de
 
     return err_val;
 }
+
+#if _MSC_VER
+#    pragma warning(pop)
+#endif  

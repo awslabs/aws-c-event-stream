@@ -21,6 +21,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+/* disable warning about fopen() this is just a test */
+#    pragma warning(disable : 4996)
+#endif
+
 #ifdef _WIN32
 #define DELIM  "\\"
 #else
