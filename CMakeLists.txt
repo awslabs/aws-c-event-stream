@@ -59,6 +59,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DAWS_EVENT_STREAM_EXPORTS)
+endif()
+
 find_package(aws-c-common)
 find_package(aws-checksums)
 
