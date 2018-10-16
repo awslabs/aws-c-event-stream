@@ -75,7 +75,7 @@ uint32_t compute_headers_len(struct aws_array_list *headers) {
     size_t headers_len = 0;
 
     for (size_t i = 0; i < headers_count; ++i) {
-        struct aws_event_stream_header_value_pair *header;
+        struct aws_event_stream_header_value_pair *header = NULL;
 
         aws_array_list_get_at_ptr(headers, (void **) &header, i);
 
@@ -106,7 +106,7 @@ size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
     uint8_t *buffer_alias = buffer;
 
     for (size_t i = 0; i < headers_count; ++i) {
-        struct aws_event_stream_header_value_pair *header;
+        struct aws_event_stream_header_value_pair *header = NULL;
 
         aws_array_list_get_at_ptr(headers, (void **) &header, i);
         *buffer_alias = (uint8_t) header->header_name_len;
@@ -439,7 +439,8 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
     fprintf(fd, "  \"headers\": [");
 
     for (uint16_t i = 0; i < headers_count; ++i) {
-        struct aws_event_stream_header_value_pair *header;
+        struct aws_event_stream_header_value_pair *header = NULL;
+
         aws_array_list_get_at_ptr(&headers, (void **) &header, i);
 
         fprintf(fd, "    {\n");
