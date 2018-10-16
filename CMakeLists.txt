@@ -64,12 +64,10 @@ if(BUILD_SHARED_LIBS)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DAWS_EVENT_STREAM_EXPORTS)
 endif()
 
-find_package(aws-c-common)
-find_package(aws-checksums)
+find_package(aws-c-common REQUIRED)
+find_package(aws-checksums REQUIRED)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} 
-    AWS::aws-c-common
-    AWS::aws-checksums)
+target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
 
 # installation & packaging
 set(LIBRARY_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib)
