@@ -544,7 +544,7 @@ void aws_event_stream_headers_list_cleanup(struct aws_array_list *headers) {
     assert(headers);
 
     for (size_t i = 0; i < aws_array_list_length(headers); ++i) {
-        struct aws_event_stream_header_value_pair *header;
+        struct aws_event_stream_header_value_pair *header = NULL;
         aws_array_list_get_at_ptr(headers, (void **) &header, i);
 
         if (header->value_owned) {
