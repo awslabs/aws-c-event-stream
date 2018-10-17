@@ -111,7 +111,7 @@ typedef void(aws_event_stream_on_error_fn)(struct aws_event_stream_streaming_dec
     struct aws_event_stream_message_prelude *prelude, int error_code, const char *message, void *user_data);
 
 
-struct AWS_CACHE_ALIGN aws_event_stream_streaming_decoder {
+struct aws_event_stream_streaming_decoder {
     struct aws_allocator *alloc;
     uint8_t working_buffer[AWS_EVENT_STREAM_PRELUDE_LENGTH];
     size_t message_pos;
@@ -368,3 +368,4 @@ extern "C" {
 #endif
 
 #endif /* AWS_EVENT_STREAM_H_ */
+
