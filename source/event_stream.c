@@ -29,6 +29,14 @@
 #define MAX_HEADERS_SIZE (128 * 1024)
 #define LIB_NAME "libaws-c-event-stream"
 
+
+#if _MSC_VER
+#     pragma warning(push)
+#    pragma warning(disable : 4221) /* aggregate initializer using local variable addresses */
+#    pragma warning(disable : 4204) /* non-constant aggregate initializer */
+#    pragma warning(disable : 4306) /* msft doesn't trust us to do pointer arithmetic. */
+#endif
+
 static struct aws_error_info s_errors[] = {
         AWS_DEFINE_ERROR_INFO( AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH,
                               "Buffer length mismatch", LIB_NAME),
@@ -1168,3 +1176,7 @@ int aws_event_stream_streaming_decoder_pump(struct aws_event_stream_streaming_de
 
     return err_val;
 }
+#if _MSC_VER
+#     pragma warning(pop)
+#endif
+
