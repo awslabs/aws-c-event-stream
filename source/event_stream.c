@@ -1137,7 +1137,7 @@ static int s_verify_prelude_state(
     struct aws_event_stream_streaming_decoder *decoder,
     const uint8_t *data,
     size_t len,
-    size_t *processed) /* NOLINT */{
+    size_t *processed) /* NOLINT */ {
     (void)data;
     (void)len;
     (void)processed;
