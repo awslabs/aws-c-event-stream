@@ -118,7 +118,9 @@ int main(void) {
         if (feof(stdin)) {
             fprintf(stdout, "\n");
             return 0;
-        } else if (ferror(stdin)) {
+        }
+
+        if (ferror(stdin)) {
             perror("Error reading from stdin\n");
             return ferror(stdin);
         }
