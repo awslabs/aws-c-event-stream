@@ -20,7 +20,9 @@
 
 static void s_on_payload_segment(struct aws_event_stream_streaming_decoder *decoder,
                                  struct aws_byte_buf *data, int8_t final_segment, void *user_data) {
-
+    (void)decoder;
+    (void)final_segment;
+    (void)user_data;
     if (data->len) {
         fwrite(data->buffer, sizeof(uint8_t), data->len, stdout);
     }
@@ -29,6 +31,8 @@ static void s_on_payload_segment(struct aws_event_stream_streaming_decoder *deco
 
 static void s_on_prelude_received(struct aws_event_stream_streaming_decoder *decoder,
                                   struct aws_event_stream_message_prelude *prelude, void *user_data) {
+    (void)decoder;
+    (void)user_data;
 
     fprintf(stdout, "\n--------------------------------------------------------------------------------\n");
     fprintf(stdout, "total_length = 0x%08" PRIx32 "\nheaders_len = 0x%08" PRIx32 "\nprelude_crc = 0x%08" PRIx32 "\n\n",
@@ -38,6 +42,9 @@ static void s_on_prelude_received(struct aws_event_stream_streaming_decoder *dec
 static void s_on_header_received(struct aws_event_stream_streaming_decoder *decoder,
                                  struct aws_event_stream_message_prelude *prelude,
                                  struct aws_event_stream_header_value_pair *header, void *user_data) {
+    (void)decoder;
+    (void)prelude;
+    (void)user_data;
     fwrite(header->header_name, sizeof(uint8_t), (size_t) header->header_name_len, stdout);
 
     fprintf(stdout, ": ");
@@ -75,7 +82,9 @@ static void s_on_header_received(struct aws_event_stream_streaming_decoder *deco
 static void s_on_error(struct aws_event_stream_streaming_decoder *decoder,
                        struct aws_event_stream_message_prelude *prelude, int error_code, const char *message,
                        void *user_data) {
-
+    (void)decoder;
+    (void)prelude;
+    (void)user_data;
     fprintf(stderr, "Error encountered: Code: %d, Error Str: %s, Message: %s\n", error_code,
             aws_error_debug_str(error_code), message);
     exit(-1);
@@ -109,7 +118,9 @@ int main(void) {
         if (feof(stdin)) {
             fprintf(stdout, "\n");
             return 0;
-        } else if (ferror(stdin)) {
+        }
+
+        if (ferror(stdin)) {
             perror("Error reading from stdin\n");
             return ferror(stdin);
         }
