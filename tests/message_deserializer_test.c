@@ -16,8 +16,8 @@
 #include <aws/event-stream/event_stream.h>
 #include <aws/testing/aws_test_harness.h>
 
-static int s_test_outgoing_no_op_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_outgoing_no_op_valid_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
     (void)ctx;
     uint8_t test_data[] = {
         0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
@@ -43,8 +43,8 @@ static int s_test_outgoing_no_op_valid_fn(struct aws_allocator *alloc, void *ctx
 
 AWS_TEST_CASE(test_outgoing_no_op_valid, s_test_outgoing_no_op_valid_fn)
 
-static int s_test_outgoing_application_data_no_headers_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_outgoing_application_data_no_headers_valid_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
     (void)ctx;
     uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x00, 0xfd, 0x52, 0x8c, 0x5a, 0x7b, 0x27, 0x66,
                            0x6f, 0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0xc3, 0x65, 0x39, 0x36};
@@ -86,8 +86,8 @@ static int s_test_outgoing_application_data_no_headers_valid_fn(struct aws_alloc
 
 AWS_TEST_CASE(test_outgoing_application_data_no_headers_valid, s_test_outgoing_application_data_no_headers_valid_fn)
 
-static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
     (void)ctx;
     uint8_t test_data[] = {0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x20, 0x07, 0xFD, 0x83, 0x96, 0x0C,
                            'c',  'o',  'n',  't',  'e',  'n',  't',  '-',  't',  'y',  'p',  'e',  0x07,
@@ -99,7 +99,8 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
     ASSERT_SUCCESS(
-        aws_event_stream_message_from_buffer(&message, alloc, &test_buf), "Message validation should have succeeded");
+        aws_event_stream_message_from_buffer(&message, allocator, &test_buf),
+        "Message validation should have succeeded");
 
     ASSERT_INT_EQUALS(
         0x0000003D, aws_event_stream_message_total_length(&message), "Message length should have been 0x0000003D");
@@ -124,7 +125,7 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
         expected_str);
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, alloc), "Header initialization failed");
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers), "Header parsing should have succeeded");
     ASSERT_INT_EQUALS(1, headers.length, "There should be exactly one header found");

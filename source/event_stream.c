@@ -80,8 +80,9 @@ void aws_event_stream_load_error_strings(void) {
 /* Computes the byte length necessary to store the headers represented in the headers list.
  * returns that length. */
 uint32_t compute_headers_len(struct aws_array_list *headers) {
-    if (!headers || !aws_array_list_length(headers))
+    if (!headers || !aws_array_list_length(headers)) {
         return 0;
+    }
 
     size_t headers_count = aws_array_list_length(headers);
     size_t headers_len = 0;
@@ -111,8 +112,9 @@ uint32_t compute_headers_len(struct aws_array_list *headers) {
  returns the new buffer offset for use elsewhere. Assumes buffer length is at least the length of the return value
  from compute_headers_length() */
 size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
-    if (!headers || !aws_array_list_length(headers))
+    if (!headers || !aws_array_list_length(headers)) {
         return 0;
+    }
 
     size_t headers_count = aws_array_list_length(headers);
     uint8_t *buffer_alias = buffer;
@@ -401,9 +403,11 @@ uint32_t aws_event_stream_message_prelude_crc(const struct aws_event_stream_mess
     return aws_read_u32(message->message_buffer + PRELUDE_CRC_OFFSET);
 }
 
-int aws_event_stream_message_headers(const struct aws_event_stream_message *message, struct aws_array_list *list) {
+int aws_event_stream_message_headers(const struct aws_event_stream_message *message, struct aws_array_list *headers) {
     return get_headers_from_buffer(
-        list, message->message_buffer + AWS_EVENT_STREAM_PRELUDE_LENGTH, aws_event_stream_message_headers_len(message));
+        headers,
+        message->message_buffer + AWS_EVENT_STREAM_PRELUDE_LENGTH,
+        aws_event_stream_message_headers_len(message));
 }
 
 const uint8_t *aws_event_stream_message_payload(const struct aws_event_stream_message *message) {
@@ -1049,7 +1053,9 @@ static int s_headers_state(
     if (current_pos < headers_boundary) {
         decoder->state = s_start_header;
         return AWS_OP_SUCCESS;
-    } else if (current_pos == headers_boundary) {
+    }
+
+    if (current_pos == headers_boundary) {
         decoder->state = s_payload_state;
         return AWS_OP_SUCCESS;
     }

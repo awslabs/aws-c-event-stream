@@ -16,15 +16,14 @@
 #include <aws/event-stream/event_stream.h>
 #include <aws/testing/aws_test_harness.h>
 
-static int s_test_incoming_no_op_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_incoming_no_op_valid_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
     uint8_t expected_data[] = {
         0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
 
     struct aws_event_stream_message message;
     ASSERT_SUCCESS(
-        aws_event_stream_message_init(&message, alloc, NULL, NULL), "Message validation should have succeeded");
+        aws_event_stream_message_init(&message, allocator, NULL, NULL), "Message validation should have succeeded");
 
     ASSERT_BIN_ARRAYS_EQUALS(
         expected_data,
@@ -40,8 +39,7 @@ static int s_test_incoming_no_op_valid_fn(struct aws_allocator *alloc, void *ctx
 
 AWS_TEST_CASE(test_incoming_no_op_valid, s_test_incoming_no_op_valid_fn)
 
-static int s_test_incoming_application_data_no_headers_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_incoming_application_data_no_headers_valid_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
     uint8_t expected_data[] = {0x00, 0x00, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x00, 0xfd, 0x52, 0x8c, 0x5a, 0x7b, 0x27, 0x66,
                                0x6f, 0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0xc3, 0x65, 0x39, 0x36};
@@ -50,7 +48,8 @@ static int s_test_incoming_application_data_no_headers_valid_fn(struct aws_alloc
     struct aws_event_stream_message message;
     struct aws_byte_buf test_buf = aws_byte_buf_from_c_str(test_str);
     ASSERT_SUCCESS(
-        aws_event_stream_message_init(&message, alloc, NULL, &test_buf), "Message validation should have succeeded");
+        aws_event_stream_message_init(&message, allocator, NULL, &test_buf),
+        "Message validation should have succeeded");
 
     ASSERT_BIN_ARRAYS_EQUALS(
         expected_data,
@@ -66,8 +65,7 @@ static int s_test_incoming_application_data_no_headers_valid_fn(struct aws_alloc
 
 AWS_TEST_CASE(test_incoming_application_data_no_headers_valid, s_test_incoming_application_data_no_headers_valid_fn)
 
-static int s_test_incoming_application_one_compressed_header_pair_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_incoming_application_one_compressed_header_pair_valid_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
     uint8_t expected_data[] = {0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x20, 0x07, 0xFD, 0x83, 0x96, 0x0C,
                                'c',  'o',  'n',  't',  'e',  'n',  't',  '-',  't',  'y',  'p',  'e',  0x07,
@@ -79,7 +77,7 @@ static int s_test_incoming_application_one_compressed_header_pair_valid_fn(struc
     struct aws_event_stream_message message;
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, alloc), "Header initialization failed");
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
 
     const char *header_name = "content-type";
     const char *header_value = "application/json";
@@ -92,7 +90,7 @@ static int s_test_incoming_application_one_compressed_header_pair_valid_fn(struc
     struct aws_byte_buf test_buf = aws_byte_buf_from_c_str(test_str);
 
     ASSERT_SUCCESS(
-        aws_event_stream_message_init(&message, alloc, &headers, &test_buf),
+        aws_event_stream_message_init(&message, allocator, &headers, &test_buf),
         "Message validation should have succeeded");
 
     ASSERT_BIN_ARRAYS_EQUALS(
@@ -112,8 +110,7 @@ AWS_TEST_CASE(
     test_incoming_application_one_compressed_header_pair_valid,
     s_test_incoming_application_one_compressed_header_pair_valid_fn)
 
-static int s_test_incoming_application_int32_header_valid_fn(struct aws_allocator *alloc, void *ctx) {
-    (void)alloc;
+static int s_test_incoming_application_int32_header_valid_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
     uint8_t expected_data[] = {0x00, 0x00, 0x00, 0x2B, 0x00, 0x00, 0x00, 0x0E, 0x34, 0x8B, 0xEC, 0x7B, 0x08, 'e',  'v',
                                'e',  'n',  't',  '-',  'i',  'd',  0x04, 0x00, 0x00, 0xA0, 0x0C, 0x7b, 0x27, 0x66, 0x6f,
@@ -123,7 +120,7 @@ static int s_test_incoming_application_int32_header_valid_fn(struct aws_allocato
     struct aws_event_stream_message message;
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, alloc), "Header initialization failed");
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
 
     const char *header_name = "event-id";
 
@@ -133,7 +130,7 @@ static int s_test_incoming_application_int32_header_valid_fn(struct aws_allocato
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_c_str(test_str);
 
-    ASSERT_SUCCESS(aws_event_stream_message_init(&message, alloc, &headers, &test_buf), "buffers didn't match");
+    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers, &test_buf), "buffers didn't match");
 
     ASSERT_BIN_ARRAYS_EQUALS(
         expected_data,

@@ -86,17 +86,33 @@ static void s_decoder_test_on_error(
     decoder_data->latest_error = error_code;
 }
 
-static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct aws_allocator *alloc, void *ctx) {
+static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struct aws_allocator *allocator, void *ctx) {
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
+        0x00,
+        0x00,
+        0x00,
+        0x10,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x05,
+        0xc2,
+        0x48,
+        0xeb,
+        0x7d,
+        0x98,
+        0xc8,
+        0xff,
+    };
 
     (void)ctx;
-    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = alloc, .latest_error = 0};
+    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(
         &decoder,
-        alloc,
+        allocator,
         s_decoder_test_on_payload_segment,
         s_decoder_test_on_prelude_received,
         s_decoder_test_header_received,
@@ -114,7 +130,7 @@ static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struc
     ASSERT_INT_EQUALS(0, decoder_data.written, "No payload data should have been written");
 
     if (decoder_data.latest_payload) {
-        aws_mem_release(alloc, decoder_data.latest_payload);
+        aws_mem_release(allocator, decoder_data.latest_payload);
     }
 
     aws_event_stream_streaming_decoder_clean_up(&decoder);
@@ -126,17 +142,19 @@ AWS_TEST_CASE(
     test_streaming_decoder_incoming_no_op_valid_single_message,
     s_test_streaming_decoder_incoming_no_op_valid_single_message_fn)
 
-static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aws_allocator *alloc, void *ctx) {
-    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x00, 0xfd, 0x52, 0x8c, 0x5a, 0x7b, 0x27, 0x66,
-                           0x6f, 0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0xc3, 0x65, 0x39, 0x36};
+static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aws_allocator *allocator, void *ctx) {
+    uint8_t test_data[] = {
+        0x00, 0x00, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x00, 0xfd, 0x52, 0x8c, 0x5a, 0x7b, 0x27, 0x66,
+        0x6f, 0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0xc3, 0x65, 0x39, 0x36,
+    };
 
     (void)ctx;
-    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = alloc, .latest_error = 0};
+    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(
         &decoder,
-        alloc,
+        allocator,
         s_decoder_test_on_payload_segment,
         s_decoder_test_on_prelude_received,
         s_decoder_test_header_received,
@@ -168,7 +186,7 @@ static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aw
         expected_str);
 
     if (decoder_data.latest_payload) {
-        aws_mem_release(alloc, decoder_data.latest_payload);
+        aws_mem_release(allocator, decoder_data.latest_payload);
     }
 
     aws_event_stream_streaming_decoder_clean_up(&decoder);
@@ -181,21 +199,27 @@ AWS_TEST_CASE(
     s_test_streaming_decoder_incoming_application_no_headers_fn)
 
 static int s_test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn(
-    struct aws_allocator *alloc,
+    struct aws_allocator *allocator,
     void *ctx) {
     (void)ctx;
-    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x20, 0x07, 0xFD, 0x83, 0x96, 0x0C,
-                           'c',  'o',  'n',  't',  'e',  'n',  't',  '-',  't',  'y',  'p',  'e',  0x07,
-                           0x00, 0x10, 'a',  'p',  'p',  'l',  'i',  'c',  'a',  't',  'i',  'o',  'n',
-                           '/',  'j',  's',  'o',  'n',  0x7b, 0x27, 0x66, 0x6f, 0x6f, 0x27, 0x3a, 0x27,
-                           0x62, 0x61, 0x72, 0x27, 0x7d, 0x8D, 0x9C, 0x08, 0xB1};
+    uint8_t test_data[] = {
+        0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x20, 0x07, 0xFD, 0x83, 0x96, 0x0C, 'c',  'o',  'n',
+        't',  'e',  'n',  't',  '-',  't',  'y',  'p',  'e',  0x07, 0x00, 0x10, 'a',  'p',  'p',  'l',
+        'i',  'c',  'a',  't',  'i',  'o',  'n',  '/',  'j',  's',  'o',  'n',  0x7b, 0x27, 0x66, 0x6f,
+        0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0x8D, 0x9C, 0x08, 0xB1,
+    };
 
-    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = alloc, .latest_error = 0};
+    struct test_decoder_data decoder_data = {
+        .latest_payload = 0,
+        .written = 0,
+        .alloc = allocator,
+        .latest_error = 0,
+    };
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(
         &decoder,
-        alloc,
+        allocator,
         s_decoder_test_on_payload_segment,
         s_decoder_test_on_prelude_received,
         s_decoder_test_header_received,
@@ -245,7 +269,7 @@ static int s_test_streaming_decoder_incoming_application_one_compressed_header_p
         expected_str);
 
     if (decoder_data.latest_payload) {
-        aws_mem_release(alloc, decoder_data.latest_payload);
+        aws_mem_release(allocator, decoder_data.latest_payload);
     }
 
     return 0;
@@ -255,98 +279,100 @@ AWS_TEST_CASE(
     test_streaming_decoder_incoming_application_one_compressed_header_pair_valid,
     s_test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn)
 
-static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_allocator *alloc, void *ctx) {
+static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
-    uint8_t test_data[] = {/* message 1 */
-                           0x00,
-                           0x00,
-                           0x00,
-                           0x10,
-                           0x00,
-                           0x00,
-                           0x00,
-                           0x00,
-                           0x05,
-                           0xc2,
-                           0x48,
-                           0xeb,
-                           0x7d,
-                           0x98,
-                           0xc8,
-                           0xff,
-                           /* message 2 */
-                           0x00,
-                           0x00,
-                           0x00,
-                           0x3D,
-                           0x00,
-                           0x00,
-                           0x00,
-                           0x20,
-                           0x07,
-                           0xFD,
-                           0x83,
-                           0x96,
-                           0x0C,
-                           'c',
-                           'o',
-                           'n',
-                           't',
-                           'e',
-                           'n',
-                           't',
-                           '-',
-                           't',
-                           'y',
-                           'p',
-                           'e',
-                           0x07,
-                           0x00,
-                           0x10,
-                           'a',
-                           'p',
-                           'p',
-                           'l',
-                           'i',
-                           'c',
-                           'a',
-                           't',
-                           'i',
-                           'o',
-                           'n',
-                           '/',
-                           'j',
-                           's',
-                           'o',
-                           'n',
-                           0x7b,
-                           0x27,
-                           0x66,
-                           0x6f,
-                           0x6f,
-                           0x27,
-                           0x3a,
-                           0x27,
-                           0x62,
-                           0x61,
-                           0x72,
-                           0x27,
-                           0x7d,
-                           0x8D,
-                           0x9C,
-                           0x08,
-                           0xB1};
+    uint8_t test_data[] = {
+        /* message 1 */
+        0x00,
+        0x00,
+        0x00,
+        0x10,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x05,
+        0xc2,
+        0x48,
+        0xeb,
+        0x7d,
+        0x98,
+        0xc8,
+        0xff,
+        /* message 2 */
+        0x00,
+        0x00,
+        0x00,
+        0x3D,
+        0x00,
+        0x00,
+        0x00,
+        0x20,
+        0x07,
+        0xFD,
+        0x83,
+        0x96,
+        0x0C,
+        'c',
+        'o',
+        'n',
+        't',
+        'e',
+        'n',
+        't',
+        '-',
+        't',
+        'y',
+        'p',
+        'e',
+        0x07,
+        0x00,
+        0x10,
+        'a',
+        'p',
+        'p',
+        'l',
+        'i',
+        'c',
+        'a',
+        't',
+        'i',
+        'o',
+        'n',
+        '/',
+        'j',
+        's',
+        'o',
+        'n',
+        0x7b,
+        0x27,
+        0x66,
+        0x6f,
+        0x6f,
+        0x27,
+        0x3a,
+        0x27,
+        0x62,
+        0x61,
+        0x72,
+        0x27,
+        0x7d,
+        0x8D,
+        0x9C,
+        0x08,
+        0xB1,
+    };
 
     size_t first_message_size = 0x10;
     size_t read_size = 7; /* make this a weird number to force edge case coverage in the parser.
                                 This will fall into the middle of message boundaries and preludes. */
 
-    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = alloc, .latest_error = 0};
+    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(
         &decoder,
-        alloc,
+        allocator,
         s_decoder_test_on_payload_segment,
         s_decoder_test_on_prelude_received,
         s_decoder_test_header_received,
@@ -420,7 +446,7 @@ static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_all
         expected_str);
 
     if (decoder_data.latest_payload) {
-        aws_mem_release(alloc, decoder_data.latest_payload);
+        aws_mem_release(allocator, decoder_data.latest_payload);
     }
 
     aws_event_stream_streaming_decoder_clean_up(&decoder);

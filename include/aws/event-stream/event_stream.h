@@ -152,7 +152,7 @@ extern "C" {
 AWS_EVENT_STREAM_API int aws_event_stream_message_init(
     struct aws_event_stream_message *message,
     struct aws_allocator *alloc,
-    struct aws_array_list *header_list,
+    struct aws_array_list *headers,
     struct aws_byte_buf *payload);
 
 /**
@@ -207,7 +207,7 @@ AWS_EVENT_STREAM_API int aws_event_stream_message_to_debug_str(
  */
 AWS_EVENT_STREAM_API int aws_event_stream_message_headers(
     const struct aws_event_stream_message *message,
-    struct aws_array_list *header_list);
+    struct aws_array_list *headers);
 
 /**
  * Returns a pointer to the beginning of the message payload.

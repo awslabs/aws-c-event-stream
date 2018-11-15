@@ -105,7 +105,7 @@ write_positive_test_case(const char *root_dir, const char *test_name, struct aws
     free(dec_output_file);
 }
 
-int main(int argc, char *argv[]) {
+int main(void) {
     struct aws_array_list headers;
     struct aws_allocator *alloc = aws_default_allocator();
     aws_event_stream_headers_list_init(&headers, alloc);
