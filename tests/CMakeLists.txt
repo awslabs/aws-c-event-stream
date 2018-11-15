@@ -10,23 +10,25 @@
 #on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
 #express or implied.See the License for the specific language governing
 #permissions and limitations under the License.
-include(AwsTestHarness) enable_testing()
+include(AwsTestHarness)
+enable_testing()
 
-    file(GLOB TEST_SRC "*.c") file(GLOB TESTS ${TEST_SRC})
+file(GLOB TEST_SRC "*.c")
+file(GLOB TESTS ${TEST_SRC})
 
-        set(TEST_BINARY_NAME ${CMAKE_PROJECT_NAME} - tests)
+set(TEST_BINARY_NAME ${CMAKE_PROJECT_NAME} - tests)
 
-            add_test_case(test_incoming_no_op_valid) add_test_case(test_incoming_application_data_no_headers_valid)
-                add_test_case(test_incoming_application_one_compressed_header_pair_valid)
-                    add_test_case(test_incoming_application_int32_header_valid)
+add_test_case(test_incoming_no_op_valid) add_test_case(test_incoming_application_data_no_headers_valid)
+add_test_case(test_incoming_application_one_compressed_header_pair_valid)
+add_test_case(test_incoming_application_int32_header_valid)
 
-                        add_test_case(test_outgoing_no_op_valid)
-                            add_test_case(test_outgoing_application_data_no_headers_valid) add_test_case(
-                                test_outgoing_application_one_compressed_header_pair_valid)
+add_test_case(test_outgoing_no_op_valid)
+add_test_case(test_outgoing_application_data_no_headers_valid)
+add_test_case(test_outgoing_application_one_compressed_header_pair_valid)
 
-                                add_test_case(test_streaming_decoder_incoming_no_op_valid_single_message)
-                                    add_test_case(test_streaming_decoder_incoming_application_no_headers) add_test_case(
-                                        test_streaming_decoder_incoming_application_one_compressed_header_pair_valid)
-                                        add_test_case(test_streaming_decoder_incoming_multiple_messages)
+add_test_case(test_streaming_decoder_incoming_no_op_valid_single_message)
+add_test_case(test_streaming_decoder_incoming_application_no_headers)
+add_test_case(test_streaming_decoder_incoming_application_one_compressed_header_pair_valid)
+add_test_case(test_streaming_decoder_incoming_multiple_messages)
 
-                                            generate_test_driver(${TEST_BINARY_NAME})
+generate_test_driver(${TEST_BINARY_NAME})
