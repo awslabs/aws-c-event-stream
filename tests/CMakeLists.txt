@@ -18,7 +18,8 @@ file(GLOB TESTS ${TEST_SRC})
 
 set(TEST_BINARY_NAME ${CMAKE_PROJECT_NAME} - tests)
 
-add_test_case(test_incoming_no_op_valid) add_test_case(test_incoming_application_data_no_headers_valid)
+add_test_case(test_incoming_no_op_valid)
+add_test_case(test_incoming_application_data_no_headers_valid)
 add_test_case(test_incoming_application_one_compressed_header_pair_valid)
 add_test_case(test_incoming_application_int32_header_valid)
 
