@@ -153,7 +153,7 @@ size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
                 break;
             case AWS_EVENT_STREAM_HEADER_BYTE_BUF:
             case AWS_EVENT_STREAM_HEADER_STRING:
-                aws_write_u16(buffer_alias, header->header_value_len);
+                aws_write_u16(header->header_value_len, buffer_alias);
                 buffer_alias += sizeof(uint16_t);
                 memcpy(buffer_alias, header->header_value.variable_len_val, header->header_value_len);
                 buffer_alias += header->header_value_len;
@@ -273,20 +273,20 @@ int aws_event_stream_message_init(
     }
 
     message->alloc = alloc;
-    message->message_buffer = (uint8_t *)aws_mem_acquire(message->alloc, total_length);
+    message->message_buffer = aws_mem_acquire(message->alloc, total_length);
 
     if (message->message_buffer) {
         message->owns_buffer = 1;
-        aws_write_u32(message->message_buffer, total_length);
+        aws_write_u32(total_length, message->message_buffer);
         uint8_t *buffer_offset = message->message_buffer + sizeof(total_length);
-        aws_write_u32(buffer_offset, headers_length);
+        aws_write_u32(headers_length, buffer_offset);
         buffer_offset += sizeof(headers_length);
 
         uint32_t running_crc =
             aws_checksums_crc32(message->message_buffer, (int)(buffer_offset - message->message_buffer), 0);
 
         const uint8_t *message_crc_boundary_start = buffer_offset;
-        aws_write_u32(buffer_offset, running_crc);
+        aws_write_u32(running_crc, buffer_offset);
         buffer_offset += sizeof(running_crc);
 
         if (headers_length) {
@@ -300,7 +300,7 @@ int aws_event_stream_message_init(
 
         running_crc = aws_checksums_crc32(
             message_crc_boundary_start, (int)(buffer_offset - message_crc_boundary_start), running_crc);
-        aws_write_u32(buffer_offset, running_crc);
+        aws_write_u32(running_crc, buffer_offset);
 
         return AWS_OP_SUCCESS;
     }
@@ -498,13 +498,13 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
             struct aws_byte_buf encode_output = aws_byte_buf_from_array((uint8_t *)encoded_buffer, buffer_len);
 
             if (header->header_value_type == AWS_EVENT_STREAM_HEADER_UUID) {
-                struct aws_byte_buf to_encode =
-                    aws_byte_buf_from_array(header->header_value.static_val, header->header_value_len);
+                struct aws_byte_cursor to_encode =
+                    aws_byte_cursor_from_array(header->header_value.static_val, header->header_value_len);
 
                 aws_base64_encode(&to_encode, &encode_output);
             } else {
-                struct aws_byte_buf to_encode =
-                    aws_byte_buf_from_array(header->header_value.variable_len_val, header->header_value_len);
+                struct aws_byte_cursor to_encode =
+                    aws_byte_cursor_from_array(header->header_value.variable_len_val, header->header_value_len);
                 aws_base64_encode(&to_encode, &encode_output);
             }
             fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "\"%s\"\n", encoded_buffer);
@@ -533,7 +533,7 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
         return aws_raise_error(AWS_ERROR_OOM);
     }
 
-    struct aws_byte_buf payload_buffer = aws_byte_buf_from_array(payload, payload_len);
+    struct aws_byte_cursor payload_buffer = aws_byte_cursor_from_array(payload, payload_len);
     struct aws_byte_buf encoded_payload_buffer = aws_byte_buf_from_array((uint8_t *)encoded_payload, encoded_len);
 
     aws_base64_encode(&payload_buffer, &encoded_payload_buffer);
@@ -652,7 +652,7 @@ int aws_event_stream_add_int16_header(
     };
 
     memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
-    aws_write_u16(header.header_value.static_val, (uint16_t)value);
+    aws_write_u16((uint16_t)value, header.header_value.static_val);
 
     return aws_array_list_push_back(headers, (void *)&header);
 }
@@ -670,7 +670,7 @@ int aws_event_stream_add_int32_header(
     };
 
     memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
-    aws_write_u32(header.header_value.static_val, (uint32_t)value);
+    aws_write_u32((uint32_t)value, header.header_value.static_val);
 
     return aws_array_list_push_back(headers, (void *)&header);
 }
@@ -688,7 +688,7 @@ int aws_event_stream_add_int64_header(
     };
 
     memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
-    aws_write_u64(header.header_value.static_val, (uint64_t)value);
+    aws_write_u64((uint64_t)value, header.header_value.static_val);
 
     return aws_array_list_push_back(headers, (void *)&header);
 }
@@ -721,7 +721,7 @@ int aws_event_stream_add_timestamp_header(
     };
 
     memcpy((void *)header.header_name, (void *)name, (size_t)name_len);
-    aws_write_u64(header.header_value.static_val, (uint64_t)value);
+    aws_write_u64((uint64_t)value, header.header_value.static_val);
 
     return aws_array_list_push_back(headers, (void *)&header);
 }
