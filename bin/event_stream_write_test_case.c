@@ -1,45 +1,47 @@
 /*
-* Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License").
-* You may not use this file except in compliance with the License.
-* A copy of the License is located at
-*
-*  http://aws.amazon.com/apache2.0
-*
-* or in the "license" file accompanying this file. This file is distributed
-* on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
-* express or implied. See the License for the specific language governing
-* permissions and limitations under the License.
-*/
+ * Copyright 2010-2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License").
+ * You may not use this file except in compliance with the License.
+ * A copy of the License is located at
+ *
+ *  http://aws.amazon.com/apache2.0
+ *
+ * or in the "license" file accompanying this file. This file is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ * express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
 
 #include <aws/event-stream/event_stream.h>
 
 #include <aws/common/encoding.h>
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef _WIN32
-#define DELIM  "\\"
+#    define DELIM "\\"
 #else
-#define DELIM "/"
+#    define DELIM "/"
 #endif
 
-static void
-write_negative_test_case(const char *root_dir, const char *test_name, const uint8_t *buffer, size_t buffer_size,
-                         const char *err_msg) {
+static void write_negative_test_case(
+    const char *root_dir,
+    const char *test_name,
+    const uint8_t *buffer,
+    size_t buffer_size,
+    const char *err_msg) {
     size_t dir_len = strlen(root_dir);
     size_t encoded_len = strlen("encoded") + strlen("negative") + strlen(test_name) + 2;
     size_t decoded_len = strlen("decoded") + strlen("negative") + strlen(test_name) + 2;
 
-    char *enc_output_file = (char *) malloc(dir_len + 1 + encoded_len + 1);
+    char *enc_output_file = (char *)malloc(dir_len + 1 + encoded_len + 1);
     sprintf(enc_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "encoded", DELIM, "negative", DELIM, test_name);
 
-    char *dec_output_file = (char *) malloc(dir_len + 1 + decoded_len + 1);
+    char *dec_output_file = (char *)malloc(dir_len + 1 + decoded_len + 1);
     sprintf(dec_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "decoded", DELIM, "negative", DELIM, test_name);
-
 
     FILE *enc = fopen(enc_output_file, "w");
     if (!enc) {
@@ -67,16 +69,18 @@ write_negative_test_case(const char *root_dir, const char *test_name, const uint
     free(dec_output_file);
 }
 
-static void
-write_positive_test_case(const char *root_dir, const char *test_name, struct aws_event_stream_message *message) {
+static void write_positive_test_case(
+    const char *root_dir,
+    const char *test_name,
+    struct aws_event_stream_message *message) {
     size_t dir_len = strlen(root_dir);
     size_t encoded_len = strlen("encoded") + strlen("positive") + strlen(test_name) + 2;
     size_t decoded_len = strlen("decoded") + strlen("positive") + strlen(test_name) + 2;
 
-    char *enc_output_file = (char *) malloc(dir_len + 1 + encoded_len + 1);
+    char *enc_output_file = (char *)malloc(dir_len + 1 + encoded_len + 1);
     sprintf(enc_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "encoded", DELIM, "positive", DELIM, test_name);
 
-    char *dec_output_file = (char *) malloc(dir_len + 1 + decoded_len + 1);
+    char *dec_output_file = (char *)malloc(dir_len + 1 + decoded_len + 1);
     sprintf(dec_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "decoded", DELIM, "positive", DELIM, test_name);
 
     FILE *enc = fopen(enc_output_file, "w");
@@ -85,8 +89,8 @@ write_positive_test_case(const char *root_dir, const char *test_name, struct aws
         exit(-1);
     }
 
-    fwrite(aws_event_stream_message_buffer(message), sizeof(uint8_t),
-           aws_event_stream_message_total_length(message), enc);
+    fwrite(
+        aws_event_stream_message_buffer(message), sizeof(uint8_t), aws_event_stream_message_total_length(message), enc);
 
     fflush(enc);
     fclose(enc);
@@ -135,11 +139,10 @@ int main(void) {
     uint32_t original_length = aws_event_stream_message_total_length(&msg);
     uint8_t *buffer_cpy = aws_mem_acquire(alloc, original_length);
     memcpy(buffer_cpy, aws_event_stream_message_buffer(&msg), original_length);
-    aws_write_u32(buffer_cpy, original_length + 1);
+    aws_write_u32(original_length + 1, buffer_cpy);
 
     write_negative_test_case(".", "corrupted_length", buffer_cpy, original_length, "Prelude checksum mismatch");
     aws_mem_release(alloc, buffer_cpy);
-
 
     /* corrupt header length */
     buffer_cpy = aws_mem_acquire(alloc, original_length);
@@ -147,10 +150,9 @@ int main(void) {
 
     uint32_t original_hdr_len = aws_event_stream_message_headers_len(&msg);
 
-    aws_write_u32(buffer_cpy + 4, original_hdr_len + 1);
+    aws_write_u32(original_hdr_len + 1, buffer_cpy + 4);
 
-    write_negative_test_case(".", "corrupted_header_len", buffer_cpy, original_length,
-                             "Prelude checksum mismatch");
+    write_negative_test_case(".", "corrupted_header_len", buffer_cpy, original_length, "Prelude checksum mismatch");
     aws_mem_release(alloc, buffer_cpy);
 
     /* corrupt headers */
@@ -160,11 +162,8 @@ int main(void) {
     uint32_t hdr_len = aws_event_stream_message_headers_len(&msg);
     buffer_cpy[hdr_len + AWS_EVENT_STREAM_PRELUDE_LENGTH + 1] = 'a';
 
-
-    write_negative_test_case(".", "corrupted_headers", buffer_cpy, original_length,
-                             "Message checksum mismatch");
+    write_negative_test_case(".", "corrupted_headers", buffer_cpy, original_length, "Message checksum mismatch");
     aws_mem_release(alloc, buffer_cpy);
-
 
     buffer_cpy = aws_mem_acquire(alloc, original_length);
     memcpy(buffer_cpy, aws_event_stream_message_buffer(&msg), original_length);
@@ -172,10 +171,13 @@ int main(void) {
 
     /* corrupt payload */
     aws_event_stream_message_init(&msg, alloc, NULL, &payload);
-    ((uint8_t *) aws_event_stream_message_payload(&msg))[0] = '[';
-    write_negative_test_case(".", "corrupted_payload", aws_event_stream_message_buffer(&msg),
-                             aws_event_stream_message_total_length(&msg),
-                             "Message checksum mismatch");
+    ((uint8_t *)aws_event_stream_message_payload(&msg))[0] = '[';
+    write_negative_test_case(
+        ".",
+        "corrupted_payload",
+        aws_event_stream_message_buffer(&msg),
+        aws_event_stream_message_total_length(&msg),
+        "Message checksum mismatch");
 
     aws_event_stream_message_clean_up(&msg);
 
@@ -207,8 +209,8 @@ int main(void) {
     static const char byte_buf_hdr[] = "byte buf";
     static const char byte_buf[] = "I'm a little teapot!";
 
-    aws_event_stream_add_bytebuf_header(&headers, byte_buf_hdr, sizeof(byte_buf_hdr) - 1,
-                                        (uint8_t *) byte_buf, sizeof(byte_buf) - 1, 0);
+    aws_event_stream_add_bytebuf_header(
+        &headers, byte_buf_hdr, sizeof(byte_buf_hdr) - 1, (uint8_t *)byte_buf, sizeof(byte_buf) - 1, 0);
 
     static const char timestamp_hdr[] = "timestamp";
     aws_event_stream_add_timestamp_header(&headers, timestamp_hdr, sizeof(timestamp_hdr) - 1, 8675309);
@@ -219,19 +221,17 @@ int main(void) {
     static const char int64_hdr[] = "int64";
     aws_event_stream_add_int64_header(&headers, int64_hdr, sizeof(int64_hdr) - 1, 42424242);
 
-
     static const char uuid_hdr[] = "uuid";
     static const uint8_t uuid[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
-    aws_event_stream_add_uuid_header(&headers, uuid_hdr, sizeof(uuid_hdr) - 1, (uint8_t *) uuid);
+    aws_event_stream_add_uuid_header(&headers, uuid_hdr, sizeof(uuid_hdr) - 1, (uint8_t *)uuid);
     aws_event_stream_message_init(&msg, alloc, &headers, &payload);
 
     struct aws_event_stream_message sanity_check_message;
-    struct aws_byte_buf message_buffer = aws_byte_buf_from_array(aws_event_stream_message_buffer(&msg),
-                                                                 aws_event_stream_message_total_length(&msg));
+    struct aws_byte_buf message_buffer =
+        aws_byte_buf_from_array(aws_event_stream_message_buffer(&msg), aws_event_stream_message_total_length(&msg));
 
-    int err = aws_event_stream_message_from_buffer(&sanity_check_message, alloc,
-                                                   &message_buffer);
+    int err = aws_event_stream_message_from_buffer(&sanity_check_message, alloc, &message_buffer);
 
     if (err) {
         fprintf(stderr, "failed to parse what should have been a valid message\n");
