@@ -15,7 +15,7 @@ project (aws-c-event-stream C)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_INSTALL_PREFIX}/lib/cmake")
 include(AwsCFlags)
-include(Sanitizers)
+include(AwsSanitizers)
 include(CheckCCompilerFlag)
 
 if(NOT MSVC)
