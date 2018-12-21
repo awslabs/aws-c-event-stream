@@ -69,7 +69,12 @@ find_package(aws-checksums REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
 
 # installation & packaging
-set(LIBRARY_DIRECTORY ${CMAKE_INSTALL_PREFIX}/lib)
+set(LIBRARY_DIRECTORY lib)
+# Set the default lib installation path on GNU systems with GNUInstallDirs
+if (UNIX AND NOT APPLE)
+    include(GNUInstallDirs)
+    set(LIBRARY_DIRECTORY ${CMAKE_INSTALL_LIBDIR})
+endif()
 
 install(FILES ${AWS_EVENT_STREAM_HEADERS} DESTINATION "include/aws/event-stream")
 install(TARGETS ${CMAKE_PROJECT_NAME}
