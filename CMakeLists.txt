@@ -71,7 +71,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-ch
 
 aws_prepare_shared_lib_exports(${CMAKE_PROJECT_NAME})
 
-install(FILES ${AWS_EVENT_STREAM_HEADERS} DESTINATION "include/aws/event-stream" COMPONENT Development)
+install(FILES ${AWS_EVENT_STREAM_HEADERS} 
+    DESTINATION "include/aws/event-stream"
+    COMPONENT Development)
 
 install(EXPORT "${CMAKE_PROJECT_NAME}-targets"
     DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/"
@@ -83,7 +85,8 @@ configure_file("cmake/${CMAKE_PROJECT_NAME}-config.cmake"
     @ONLY)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}-config.cmake"
-    DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/" COMPONENT Development)
+    DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/"
+    COMPONENT Development)
 
 
 include(CTest)
