@@ -15,6 +15,7 @@ project (aws-c-event-stream C)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_INSTALL_PREFIX}/lib/cmake")
 include(AwsCFlags)
+include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
 
@@ -53,46 +54,36 @@ file(GLOB EVENT_STREAM_SRC
 add_library(${CMAKE_PROJECT_NAME} ${EVENT_STREAM_SRC})
 aws_set_common_properties(${CMAKE_PROJECT_NAME})
 aws_add_sanitizers(${CMAKE_PROJECT_NAME})
+aws_prepare_symbol_visibility_args(${CMAKE_PROJECT_NAME} "AWS_EVENT_STREAM")
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 
-if(BUILD_SHARED_LIBS)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC -DAWS_EVENT_STREAM_USE_IMPORT_EXPORT)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DAWS_EVENT_STREAM_EXPORTS)
-endif()
+
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES VERSION 1.0.0)
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SOVERSION 0unstable)
 
 find_package(aws-c-common REQUIRED)
 find_package(aws-checksums REQUIRED)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
 
-# installation & packaging
-set(LIBRARY_DIRECTORY lib)
-# Set the default lib installation path on GNU systems with GNUInstallDirs
-if (UNIX AND NOT APPLE)
-    include(GNUInstallDirs)
-    set(LIBRARY_DIRECTORY ${CMAKE_INSTALL_LIBDIR})
-endif()
+aws_prepare_shared_lib_exports(${CMAKE_PROJECT_NAME})
 
-install(FILES ${AWS_EVENT_STREAM_HEADERS} DESTINATION "include/aws/event-stream")
-install(TARGETS ${CMAKE_PROJECT_NAME}
-    EXPORT ${CMAKE_PROJECT_NAME}-targets
-    ARCHIVE DESTINATION ${LIBRARY_DIRECTORY}
-    LIBRARY DESTINATION ${LIBRARY_DIRECTORY}
-    RUNTIME DESTINATION lib)
+install(FILES ${AWS_EVENT_STREAM_HEADERS} DESTINATION "include/aws/event-stream" COMPONENT Development)
 
 install(EXPORT "${CMAKE_PROJECT_NAME}-targets"
     DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/"
-    NAMESPACE AWS::)
+    NAMESPACE AWS::
+    COMPONENT Development)
 
 configure_file("cmake/${CMAKE_PROJECT_NAME}-config.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}-config.cmake"
     @ONLY)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}-config.cmake"
-    DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/")
+    DESTINATION "${LIBRARY_DIRECTORY}/${CMAKE_PROJECT_NAME}/cmake/" COMPONENT Development)
 
 
 include(CTest)
