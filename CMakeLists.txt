@@ -26,7 +26,6 @@ include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
 
-message("module path is ${CMAKE_MODULE_PATH}")
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
