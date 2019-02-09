@@ -43,6 +43,7 @@ struct aws_event_stream_message {
     struct aws_allocator *alloc;
     uint8_t *message_buffer;
     uint8_t owns_buffer;
+    size_t len;
 };
 
 #define AWS_EVENT_STREAM_PRELUDE_LENGTH (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t))

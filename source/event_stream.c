@@ -274,6 +274,7 @@ int aws_event_stream_message_init(
 
     message->alloc = alloc;
     message->message_buffer = aws_mem_acquire(message->alloc, total_length);
+    message->len = total_length;
 
     if (message->message_buffer) {
         message->owns_buffer = 1;
