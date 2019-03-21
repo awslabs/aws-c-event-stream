@@ -18,6 +18,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/**
+ * 4996 is to disable unsafe function fopen vs fopen_s
+ * 4706 is to disable assignment expression inside condition expression at line 133.
+ */
+#ifdef _MSC_VER
+#pragma warning (disable: 4996 4706)
+#endif
+
 static void s_on_payload_segment(
     struct aws_event_stream_streaming_decoder *decoder,
     struct aws_byte_buf *data,

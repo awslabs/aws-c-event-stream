@@ -27,6 +27,14 @@
 #    define DELIM "/"
 #endif
 
+/**
+ * 4996 is to disable unsafe function sprintf vs sprintf_s
+ * 4310 is to disable type casting to smaller type at line 215, which is needed to avoid gcc overflow warning when casting int to int8_t
+ */
+#ifdef _MSC_VER
+#pragma warning (disable: 4996 4310)
+#endif
+
 static void write_negative_test_case(
     const char *root_dir,
     const char *test_name,
@@ -204,7 +212,7 @@ int main(void) {
     aws_event_stream_add_bool_header(&headers, bool_true, sizeof(bool_true) - 1, 1);
 
     static const char byte_hdr[] = "byte";
-    aws_event_stream_add_byte_header(&headers, byte_hdr, sizeof(byte_hdr) - 1, 0xcf);
+    aws_event_stream_add_byte_header(&headers, byte_hdr, sizeof(byte_hdr) - 1, (int8_t)0xcf);
 
     static const char byte_buf_hdr[] = "byte buf";
     static const char byte_buf[] = "I'm a little teapot!";
