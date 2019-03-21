@@ -18,6 +18,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef _MSC_VER
+#pragma warning (disable: 4996 4706)
+#endif
+
 static void s_on_payload_segment(
     struct aws_event_stream_streaming_decoder *decoder,
     struct aws_byte_buf *data,
