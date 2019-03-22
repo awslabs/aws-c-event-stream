@@ -11,6 +11,8 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 cmake_minimum_required (VERSION 3.1)
+option(STATIC_CRT "Windows specific option that to specify static/dynamic run-time library" OFF)
+
 project (aws-c-event-stream C)
 
 if (UNIX AND NOT APPLE)
