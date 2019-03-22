@@ -27,6 +27,10 @@
 #    define DELIM "/"
 #endif
 
+/**
+ * 4996 is to disable unsafe function sprintf vs sprintf_s
+ * 4310 is to disable type casting to smaller type at line 215, which is needed to avoid gcc overflow warning when casting int to int8_t
+ */
 #ifdef _MSC_VER
 #pragma warning (disable: 4996 4310)
 #endif
