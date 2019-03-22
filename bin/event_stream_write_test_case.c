@@ -28,7 +28,7 @@
 #endif
 
 #ifdef _MSC_VER
-#pragma warning (disable: 4996 4706)
+#pragma warning (disable: 4996 4310)
 #endif
 
 static void write_negative_test_case(
