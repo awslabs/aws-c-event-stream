@@ -19,7 +19,6 @@
 
 #include <aws/common/encoding.h>
 
-#include <assert.h>
 #include <inttypes.h>
 
 /* max message size is 16MB */
@@ -313,7 +312,7 @@ int aws_event_stream_message_from_buffer(
     struct aws_event_stream_message *message,
     struct aws_allocator *alloc,
     struct aws_byte_buf *buffer) {
-    assert(buffer);
+    AWS_ASSERT(buffer);
 
     message->alloc = alloc;
     message->owns_buffer = 0;
@@ -544,14 +543,14 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
 }
 
 int aws_event_stream_headers_list_init(struct aws_array_list *headers, struct aws_allocator *allocator) {
-    assert(headers);
-    assert(allocator);
+    AWS_ASSERT(headers);
+    AWS_ASSERT(allocator);
 
     return aws_array_list_init_dynamic(headers, allocator, 4, sizeof(struct aws_event_stream_header_value_pair));
 }
 
 void aws_event_stream_headers_list_cleanup(struct aws_array_list *headers) {
-    assert(headers);
+    AWS_ASSERT(headers);
 
     for (size_t i = 0; i < aws_array_list_length(headers); ++i) {
         struct aws_event_stream_header_value_pair *header = NULL;
