@@ -911,7 +911,7 @@ static int s_read_header_type(
     const uint8_t *data,
     size_t len,
     size_t *processed) {
-    (void)len;
+    AWS_UNUSED_PARAM(len);
     uint8_t type = *data;
     decoder->running_crc = aws_checksums_crc32(data, 1, decoder->running_crc);
     *processed += 1;
@@ -1002,7 +1002,7 @@ static int s_read_header_name_len(
     const uint8_t *data,
     size_t len,
     size_t *processed) {
-    (void)len;
+    AWS_UNUSED_PARAM(len);
     decoder->current_header.header_name_len = *data;
     decoder->message_pos++;
     decoder->current_header_name_offset++;
@@ -1018,9 +1018,9 @@ static int s_start_header(
     const uint8_t *data,
     size_t len,
     size_t *processed) /* NOLINT */ {
-    (void)data;
-    (void)len;
-    (void)processed;
+    AWS_UNUSED_PARAM(data);
+    AWS_UNUSED_PARAM(len);
+    AWS_UNUSED_PARAM(processed);
     decoder->state = s_read_header_name_len;
     decoder->current_header_name_offset = decoder->message_pos;
 
@@ -1041,9 +1041,9 @@ static int s_headers_state(
     const uint8_t *data,
     size_t len,
     size_t *processed) /* NOLINT */ {
-    (void)data;
-    (void)len;
-    (void)processed;
+    AWS_UNUSED_PARAM(data);
+    AWS_UNUSED_PARAM(len);
+    AWS_UNUSED_PARAM(processed);
 
     size_t current_pos = decoder->message_pos;
 
@@ -1137,9 +1137,9 @@ static int s_verify_prelude_state(
     const uint8_t *data,
     size_t len,
     size_t *processed) /* NOLINT */ {
-    (void)data;
-    (void)len;
-    (void)processed;
+    AWS_UNUSED_PARAM(data);
+    AWS_UNUSED_PARAM(len);
+    AWS_UNUSED_PARAM(processed);
 
     decoder->prelude.headers_len = aws_read_u32(decoder->working_buffer + HEADER_LEN_OFFSET);
     decoder->prelude.prelude_crc = aws_read_u32(decoder->working_buffer + PRELUDE_CRC_OFFSET);

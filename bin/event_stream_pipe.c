@@ -31,9 +31,9 @@ static void s_on_payload_segment(
     struct aws_byte_buf *data,
     int8_t final_segment,
     void *user_data) {
-    (void)decoder;
-    (void)final_segment;
-    (void)user_data;
+    AWS_UNUSED_PARAM(decoder);
+    AWS_UNUSED_PARAM(final_segment);
+    AWS_UNUSED_PARAM(user_data);
     if (data->len) {
         fwrite(data->buffer, sizeof(uint8_t), data->len, stdout);
     }
@@ -43,8 +43,8 @@ static void s_on_prelude_received(
     struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude,
     void *user_data) {
-    (void)decoder;
-    (void)user_data;
+    AWS_UNUSED_PARAM(decoder);
+    AWS_UNUSED_PARAM(user_data);
 
     fprintf(stdout, "\n--------------------------------------------------------------------------------\n");
     fprintf(
@@ -60,9 +60,9 @@ static void s_on_header_received(
     struct aws_event_stream_message_prelude *prelude,
     struct aws_event_stream_header_value_pair *header,
     void *user_data) {
-    (void)decoder;
-    (void)prelude;
-    (void)user_data;
+    AWS_UNUSED_PARAM(decoder);
+    AWS_UNUSED_PARAM(prelude);
+    AWS_UNUSED_PARAM(user_data);
     fwrite(header->header_name, sizeof(uint8_t), (size_t)header->header_name_len, stdout);
 
     fprintf(stdout, ": ");
@@ -104,9 +104,9 @@ static void s_on_error(
     int error_code,
     const char *message,
     void *user_data) {
-    (void)decoder;
-    (void)prelude;
-    (void)user_data;
+    AWS_UNUSED_PARAM(decoder);
+    AWS_UNUSED_PARAM(prelude);
+    AWS_UNUSED_PARAM(user_data);
     fprintf(
         stderr,
         "Error encountered: Code: %d, Error Str: %s, Message: %s\n",

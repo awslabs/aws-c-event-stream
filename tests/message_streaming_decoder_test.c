@@ -31,8 +31,8 @@ static void s_decoder_test_on_payload_segment(
     struct aws_byte_buf *data,
     int8_t final_segment,
     void *user_data) {
-    (void)final_segment;
-    (void)decoder;
+    AWS_UNUSED_PARAM(final_segment);
+    AWS_UNUSED_PARAM(decoder);
     struct test_decoder_data *decoder_data = (struct test_decoder_data *)user_data;
     memcpy(decoder_data->latest_payload + decoder_data->written, data->buffer, data->len);
     decoder_data->written += data->len;
@@ -43,7 +43,7 @@ static void s_decoder_test_on_prelude_received(
     struct aws_event_stream_message_prelude *prelude,
     void *user_data) {
 
-    (void)decoder;
+    AWS_UNUSED_PARAM(decoder);
     struct test_decoder_data *decoder_data = (struct test_decoder_data *)user_data;
     decoder_data->latest_prelude = *prelude;
 
@@ -63,8 +63,8 @@ static void s_decoder_test_header_received(
     struct aws_event_stream_message_prelude *prelude,
     struct aws_event_stream_header_value_pair *header,
     void *user_data) {
-    (void)decoder;
-    (void)prelude;
+    AWS_UNUSED_PARAM(decoder);
+    AWS_UNUSED_PARAM(prelude);
     struct test_decoder_data *decoder_data = (struct test_decoder_data *)user_data;
     memset(decoder_data->latest_header_name, 0, sizeof(decoder_data->latest_header_name));
     memcpy(decoder_data->latest_header_name, header->header_name, (size_t)header->header_name_len);
@@ -79,9 +79,9 @@ static void s_decoder_test_on_error(
     const char *message,
     void *user_data) {
 
-    (void)decoder;
-    (void)prelude;
-    (void)message;
+    AWS_UNUSED_PARAM(decoder);
+    AWS_UNUSED_PARAM(prelude);
+    AWS_UNUSED_PARAM(message);
     struct test_decoder_data *decoder_data = (struct test_decoder_data *)user_data;
     decoder_data->latest_error = error_code;
 }
@@ -106,7 +106,7 @@ static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struc
         0xff,
     };
 
-    (void)ctx;
+    AWS_UNUSED_PARAM(ctx);
     struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
     struct aws_event_stream_streaming_decoder decoder;
@@ -148,7 +148,7 @@ static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aw
         0x6f, 0x6f, 0x27, 0x3a, 0x27, 0x62, 0x61, 0x72, 0x27, 0x7d, 0xc3, 0x65, 0x39, 0x36,
     };
 
-    (void)ctx;
+    AWS_UNUSED_PARAM(ctx);
     struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
     struct aws_event_stream_streaming_decoder decoder;
@@ -201,7 +201,7 @@ AWS_TEST_CASE(
 static int s_test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn(
     struct aws_allocator *allocator,
     void *ctx) {
-    (void)ctx;
+    AWS_UNUSED_PARAM(ctx);
     uint8_t test_data[] = {
         0x00, 0x00, 0x00, 0x3D, 0x00, 0x00, 0x00, 0x20, 0x07, 0xFD, 0x83, 0x96, 0x0C, 'c',  'o',  'n',
         't',  'e',  'n',  't',  '-',  't',  'y',  'p',  'e',  0x07, 0x00, 0x10, 'a',  'p',  'p',  'l',
@@ -280,7 +280,7 @@ AWS_TEST_CASE(
     s_test_streaming_decoder_incoming_application_one_compressed_header_pair_valid_fn)
 
 static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_allocator *allocator, void *ctx) {
-    (void)ctx;
+    AWS_UNUSED_PARAM(ctx);
     uint8_t test_data[] = {
         /* message 1 */
         0x00,
