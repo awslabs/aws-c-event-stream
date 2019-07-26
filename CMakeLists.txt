@@ -19,7 +19,11 @@ elseif(NOT DEFINED CMAKE_INSTALL_LIBDIR)
     set(CMAKE_INSTALL_LIBDIR "lib")
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/cmake")
+# This is required in order to append /lib/cmake to each element in CMAKE_PREFIX_PATH
+set(AWS_MODULE_DIR "/${CMAKE_INSTALL_LIBDIR}/cmake")
+string(REPLACE ";" "${AWS_MODULE_DIR};" AWS_MODULE_PATH "${CMAKE_PREFIX_PATH}${AWS_MODULE_DIR}")
+# Append that generated list to the module search path
+list(APPEND CMAKE_MODULE_PATH ${AWS_MODULE_PATH})
 
 include(AwsCFlags)
 include(AwsSharedLibSetup)
@@ -78,7 +82,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-ch
 
 aws_prepare_shared_lib_exports(${CMAKE_PROJECT_NAME})
 
-install(FILES ${AWS_EVENT_STREAM_HEADERS} 
+install(FILES ${AWS_EVENT_STREAM_HEADERS}
     DESTINATION "include/aws/event-stream"
     COMPONENT Development)
 
