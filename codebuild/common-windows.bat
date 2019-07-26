@@ -29,6 +29,3 @@ exit /b %errorlevel%
 echo Failed with error #%errorlevel%.
 exit /b %errorlevel%
 
-:error
-echo Failed with error #%errorlevel%.
-exit /b %errorlevel%
