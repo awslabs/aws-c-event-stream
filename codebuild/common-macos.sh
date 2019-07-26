@@ -4,7 +4,7 @@
 
 set -e
 
-CMAKE_ARGS="$@"
+CMAKE_ARGS="$@ -DCMAKE_INSTALL_PREFIX=../../install -DCMAKE_PREFIX_PATH=../../install -DENABLE_SANITIZERS=ON"
 
 function install_library {
     git clone https://github.com/awslabs/$1.git
@@ -12,9 +12,9 @@ function install_library {
     mkdir build
     cd build
 
-    cmake -DCMAKE_INSTALL_PREFIX=../../install -DENABLE_SANITIZERS=ON $CMAKE_ARGS ../
+    cmake $CMAKE_ARGS ../
     make install
-    
+
     cd ../..
 }
 
@@ -28,7 +28,7 @@ install_library aws-checksums
 cd aws-c-event-stream
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX=../../install -DENABLE_SANITIZERS=ON $CMAKE_ARGS ../
+cmake $CMAKE_ARGS ../
 
 make
 
