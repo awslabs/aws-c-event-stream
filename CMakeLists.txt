@@ -30,7 +30,6 @@ endif()
 # This is required in order to append /lib/cmake to each element in CMAKE_PREFIX_PATH
 set(AWS_MODULE_DIR "/${CMAKE_INSTALL_LIBDIR}/cmake")
 string(REPLACE ";" "${AWS_MODULE_DIR};" AWS_MODULE_PATH "${CMAKE_PREFIX_PATH}${AWS_MODULE_DIR}")
-message(STATUS "HEY HEY HEY Appending ${AWS_MODULE_PATH} to the module path")
 # Append that generated list to the module search path
 list(APPEND CMAKE_MODULE_PATH ${AWS_MODULE_PATH})
 

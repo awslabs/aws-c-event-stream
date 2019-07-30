@@ -51,10 +51,14 @@ static void s_decoder_test_on_prelude_received(
         aws_mem_release(decoder_data->alloc, decoder_data->latest_payload);
     }
 
-    decoder_data->latest_payload = aws_mem_acquire(
-        decoder_data->alloc,
-        decoder_data->latest_prelude.total_len - AWS_EVENT_STREAM_PRELUDE_LENGTH - AWS_EVENT_STREAM_TRAILER_LENGTH -
-            decoder_data->latest_prelude.headers_len);
+    const size_t payload_size = decoder_data->latest_prelude.total_len - AWS_EVENT_STREAM_PRELUDE_LENGTH -
+                                AWS_EVENT_STREAM_TRAILER_LENGTH - decoder_data->latest_prelude.headers_len;
+
+    if (payload_size) {
+        decoder_data->latest_payload = aws_mem_acquire(decoder_data->alloc, payload_size);
+    } else {
+        decoder_data->latest_payload = NULL;
+    }
     decoder_data->written = 0;
 }
 
