@@ -141,9 +141,8 @@ struct aws_event_stream_streaming_decoder {
     void *user_context;
 };
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+AWS_EXTERN_C_BEGIN
+
 /**
  * Initializes with a list of headers, the payload, and a payload length. CRCs will be computed for you.
  * If headers or payload is NULL, then the fields will be appropriately set to indicate no headers and/or no payload.
@@ -417,12 +416,17 @@ AWS_EVENT_STREAM_API int aws_event_stream_streaming_decoder_pump(
     const struct aws_byte_buf *data);
 
 /**
- * Loads error strings for this API so that aws_last_error_str etc... will return useful debug strings.
+ * Initializes internal datastructures used by aws-c-event-stream.
+ * Must be called before using any functionality in aws-c-event-stream.
  */
-AWS_EVENT_STREAM_API void aws_event_stream_load_error_strings(void);
+AWS_EVENT_STREAM_API void aws_event_stream_library_init(struct aws_allocator *allocator);
 
-#ifdef __cplusplus
-}
-#endif
+/**
+ * Clean up internal datastructures used by aws-c-event-stream.
+ * Must not be called until application is done using functionality in aws-c-event-stream.
+ */
+AWS_EVENT_STREAM_API void aws_event_stream_library_clean_up(void);
+
+AWS_EXTERN_C_END
 
 #endif /* AWS_EVENT_STREAM_H_ */
