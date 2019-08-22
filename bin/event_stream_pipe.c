@@ -118,9 +118,8 @@ static void s_on_error(
 
 int main(void) {
 
-    aws_load_error_strings();
-    aws_event_stream_load_error_strings();
     struct aws_allocator *alloc = aws_default_allocator();
+    aws_event_stream_library_init(alloc);
 
     struct aws_event_stream_streaming_decoder decoder;
     aws_event_stream_streaming_decoder_init(
