@@ -1172,7 +1172,8 @@ static int s_verify_prelude_state(
             return AWS_OP_ERR;
         }
 
-        /* Should call on_prelude() after passing crc check and limitation check, otherwise call on_prelude() with incorrect prelude is error prune. */
+        /* Should only call on_prelude() after passing crc check and limitation check, otherwise call on_prelude() with
+         * incorrect prelude is error prune. */
         decoder->on_prelude(decoder, &decoder->prelude, decoder->user_context);
 
         decoder->running_crc = aws_checksums_crc32(
