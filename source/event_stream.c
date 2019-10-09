@@ -1154,8 +1154,6 @@ static int s_verify_prelude_state(
     decoder->prelude.prelude_crc = aws_read_u32(decoder->working_buffer + PRELUDE_CRC_OFFSET);
     decoder->prelude.total_len = aws_read_u32(decoder->working_buffer + TOTAL_LEN_OFFSET);
 
-    decoder->on_prelude(decoder, &decoder->prelude, decoder->user_context);
-
     decoder->running_crc = aws_checksums_crc32(decoder->working_buffer, PRELUDE_CRC_OFFSET, 0);
 
     if (AWS_LIKELY(decoder->running_crc == decoder->prelude.prelude_crc)) {
@@ -1173,6 +1171,9 @@ static int s_verify_prelude_state(
                 decoder->user_context);
             return AWS_OP_ERR;
         }
+
+        /* Should call on_prelude() after passing crc check and limitation check, otherwise call on_prelude() with incorrect prelude is error prune. */
+        decoder->on_prelude(decoder, &decoder->prelude, decoder->user_context);
 
         decoder->running_crc = aws_checksums_crc32(
             decoder->working_buffer + PRELUDE_CRC_OFFSET,
