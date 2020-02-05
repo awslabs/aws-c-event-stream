@@ -13,25 +13,13 @@
 cmake_minimum_required (VERSION 3.1)
 project (aws-c-event-stream C)
 
-if (DEFINED CMAKE_PREFIX_PATH)
-    file(TO_CMAKE_PATH "${CMAKE_PREFIX_PATH}" CMAKE_PREFIX_PATH)
-endif()
-
-if (DEFINED CMAKE_INSTALL_PREFIX)
-    file(TO_CMAKE_PATH "${CMAKE_INSTALL_PREFIX}" CMAKE_INSTALL_PREFIX)
-endif()
-
 if (UNIX AND NOT APPLE)
     include(GNUInstallDirs)
 elseif(NOT DEFINED CMAKE_INSTALL_LIBDIR)
     set(CMAKE_INSTALL_LIBDIR "lib")
 endif()
-
-# This is required in order to append /lib/cmake to each element in CMAKE_PREFIX_PATH
-set(AWS_MODULE_DIR "/${CMAKE_INSTALL_LIBDIR}/cmake")
-string(REPLACE ";" "${AWS_MODULE_DIR};" AWS_MODULE_PATH "${CMAKE_PREFIX_PATH}${AWS_MODULE_DIR}")
-# Append that generated list to the module search path
-list(APPEND CMAKE_MODULE_PATH ${AWS_MODULE_PATH})
+find_package(aws-c-common REQUIRED)
+find_package(aws-checksums REQUIRED)
 
 include(AwsCFlags)
 include(AwsSharedLibSetup)
@@ -83,8 +71,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SOVERSION 0unstable)
 
-find_package(aws-c-common REQUIRED)
-find_package(aws-checksums REQUIRED)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
 
