@@ -27,6 +27,7 @@ include(AwsCFlags)
 include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
+include(AwsFindPackage)
 
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -73,10 +74,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SOVERSION 0unstable)
 
-find_package(aws-c-common REQUIRED)
-find_package(aws-checksums REQUIRED)
+aws_use_package(aws-c-common)
+aws_use_package(aws-checksums)
+aws_use_package(aws-c-io)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
+target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 
 aws_prepare_shared_lib_exports(${CMAKE_PROJECT_NAME})
 

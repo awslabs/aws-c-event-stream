@@ -8,14 +8,10 @@
 #include <aws/checksums/crc.h>
 
 #include <aws/common/encoding.h>
+#include <aws/io/io.h>
 
 #include <inttypes.h>
 
-/* max message size is 16MB */
-#define MAX_MESSAGE_SIZE (16 * 1024 * 1024)
-
-/* max header size is 128kb */
-#define MAX_HEADERS_SIZE (128 * 1024)
 #define LIB_NAME "libaws-c-event-stream"
 
 #if _MSC_VER
@@ -58,7 +54,7 @@ static bool s_event_stream_library_initialized = false;
 void aws_event_stream_library_init(struct aws_allocator *allocator) {
     if (!s_event_stream_library_initialized) {
         s_event_stream_library_initialized = true;
-        aws_common_library_init(allocator);
+        aws_io_library_init(allocator);
         aws_register_error_info(&s_list);
     }
 }
@@ -172,7 +168,7 @@ size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
  * returns error codes defined in the public interface. */
 int get_headers_from_buffer(struct aws_array_list *headers, const uint8_t *buffer, size_t headers_len) {
 
-    if (AWS_UNLIKELY(headers_len > MAX_HEADERS_SIZE)) {
+    if (AWS_UNLIKELY(headers_len > AWS_EVENT_STREAM_MAX_HEADERS_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
     }
 
@@ -255,7 +251,7 @@ int aws_event_stream_message_init(
 
     uint32_t headers_length = compute_headers_len(headers);
 
-    if (AWS_UNLIKELY(headers_length > MAX_HEADERS_SIZE)) {
+    if (AWS_UNLIKELY(headers_length > AWS_EVENT_STREAM_MAX_HEADERS_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
     }
 
@@ -266,7 +262,7 @@ int aws_event_stream_message_init(
         return aws_raise_error(AWS_ERROR_OVERFLOW_DETECTED);
     }
 
-    if (AWS_UNLIKELY(total_length > MAX_MESSAGE_SIZE)) {
+    if (AWS_UNLIKELY(total_length > AWS_EVENT_STREAM_MAX_MESSAGE_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
     }
 
@@ -326,7 +322,7 @@ int aws_event_stream_message_from_buffer(
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
     }
 
-    if (AWS_UNLIKELY(message_length > MAX_MESSAGE_SIZE)) {
+    if (AWS_UNLIKELY(message_length > AWS_EVENT_STREAM_MAX_MESSAGE_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
     }
 
@@ -1149,7 +1145,8 @@ static int s_verify_prelude_state(
     if (AWS_LIKELY(decoder->running_crc == decoder->prelude.prelude_crc)) {
 
         if (AWS_UNLIKELY(
-                decoder->prelude.headers_len > MAX_HEADERS_SIZE || decoder->prelude.total_len > MAX_MESSAGE_SIZE)) {
+                decoder->prelude.headers_len > AWS_EVENT_STREAM_MAX_HEADERS_SIZE ||
+                decoder->prelude.total_len > AWS_EVENT_STREAM_MAX_MESSAGE_SIZE)) {
             aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
             char error_message[] = "Maximum message field size exceeded";
 

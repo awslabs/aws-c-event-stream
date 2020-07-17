@@ -12,6 +12,12 @@
 
 #include <stdio.h>
 
+/* max message size is 16MB */
+#define AWS_EVENT_STREAM_MAX_MESSAGE_SIZE (16 * 1024 * 1024)
+
+/* max header size is 128kb */
+#define AWS_EVENT_STREAM_MAX_HEADERS_SIZE (128 * 1024)
+
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = 0x1000,
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
