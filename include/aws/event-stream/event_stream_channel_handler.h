@@ -6,13 +6,13 @@
  */
 
 #include <aws/event-stream/event_stream.h>
-#include <aws/io/channel.h>
 
 struct aws_event_stream_channel_handler;
+struct aws_channel_handler;
 
 /**
  * Invoked when an aws_event_stream_message is encountered. If the message
- * parsed successfully, message will be non-null and error_code will be AWS_OP_SUCCESS.
+ * parsed successfully, message will be non-null and error_code will be AWS_ERROR_SUCCESS.
  * Otherwiuse message will be null and error_code will represent the error that was encountered.
  * Note that any case that error_code was not AWS_OP_SUCCESS, the channel also shutsdown.
  */
@@ -22,9 +22,10 @@ typedef void(aws_event_stream_channel_handler_on_message_received_fn)(
     void *user_data);
 
 /**
- * Invoked when an aws_event_stream_message is flushed to the IO interface. When error_code is AWS_OP_SUCCESS the
+ * Invoked when an aws_event_stream_message is flushed to the IO interface. When error_code is AWS_ERROR_SUCCESS the
  * write happened successfuly. Regardless, message is held from the aws_event_stream_channel_handler_write_message()
- * call and should likely be freed in this callback.
+ * call and should likely be freed in this callback. If error_code is non-zero, the channel will be shutdown immediately
+ * after this callback returns.
  */
 typedef void(aws_event_stream_channel_handler_on_message_written_fn)(
     struct aws_event_stream_message *message,
@@ -39,10 +40,11 @@ struct aws_event_stream_channel_handler_options {
      * ignored. */
     size_t initial_window_size;
     /**
-     * if set to true, windowing will be managed automatically for the user. Otherwise, after any on_message_received,
-     * the user must invoke aws_event_stream_channel_handler_increment_read_window()
+     * if set to false (the default), windowing will be managed automatically for the user.
+     * Otherwise, after any on_message_received, the user must invoke
+     * aws_event_stream_channel_handler_increment_read_window()
      */
-    bool automatic_window_management;
+    bool manual_window_management;
 };
 
 AWS_EXTERN_C_BEGIN
@@ -67,7 +69,7 @@ AWS_EVENT_STREAM_API int aws_event_stream_channel_handler_write_message(
 /**
  * Updates the read window for the channel if automatic_window_managemanet was set to false.
  */
-AWS_EVENT_STREAM_API int aws_event_stream_channel_handler_increment_read_window(
+AWS_EVENT_STREAM_API void aws_event_stream_channel_handler_increment_read_window(
     struct aws_channel_handler *handler,
     size_t window_update_size);
 

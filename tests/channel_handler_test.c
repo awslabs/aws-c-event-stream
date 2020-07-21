@@ -39,7 +39,6 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     ASSERT_SUCCESS(aws_channel_slot_insert_end(test_data->testing_channel.channel, slot));
 
     struct aws_event_stream_channel_handler_options options = {
-        .automatic_window_management = true,
         .initial_window_size = SIZE_MAX,
         .user_data = ctx,
         .on_message_received = s_fixture_on_message,
@@ -469,7 +468,7 @@ static int s_test_channel_handler_write_message(struct aws_allocator *allocator,
     ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&msg_to_send, allocator, &empty_message_buf));
     ASSERT_SUCCESS(aws_event_stream_channel_handler_write_message(
         test_data->handler, &msg_to_send, s_on_message_written, &message_test_data));
-
+    testing_channel_drain_queued_tasks(&s_test_data.testing_channel);
     ASSERT_UINT_EQUALS(0x00000010, aws_event_stream_message_total_length(&message_test_data.received_msg_cpy));
     ASSERT_UINT_EQUALS(0x00000000, aws_event_stream_message_headers_len(&message_test_data.received_msg_cpy));
     ASSERT_UINT_EQUALS(0x05c248eb, aws_event_stream_message_prelude_crc(&message_test_data.received_msg_cpy));

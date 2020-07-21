@@ -18,6 +18,8 @@
 
 #include <aws/checksums/crc.h>
 
+#include <aws/io/channel.h>
+
 static const size_t s_default_payload_size = 1024;
 
 /* an event stream message has overhead of
@@ -34,7 +36,7 @@ struct aws_event_stream_channel_handler {
     aws_event_stream_channel_handler_on_message_received_fn *on_message_received;
     void *user_data;
     size_t initial_window_size;
-    bool automatic_window_management;
+    bool manual_window_management;
 };
 
 static int s_process_read_message(
@@ -46,15 +48,15 @@ static int s_process_read_message(
 
     struct aws_byte_cursor message_cursor = aws_byte_cursor_from_buf(&message->message_data);
 
+    int error_code = AWS_ERROR_SUCCESS;
     while (message_cursor.len) {
         /* first read only the prelude so we can do checks before reading the entire buffer. */
         if (event_stream_handler->message_buf.len < AWS_EVENT_STREAM_PRELUDE_LENGTH) {
             size_t remaining_prelude = AWS_EVENT_STREAM_PRELUDE_LENGTH - event_stream_handler->message_buf.len;
-            size_t to_copy = message_cursor.len > remaining_prelude ? remaining_prelude : message_cursor.len;
+            size_t to_copy = aws_min_size(message_cursor.len, remaining_prelude);
 
             if (!aws_byte_buf_write(&event_stream_handler->message_buf, message_cursor.ptr, to_copy)) {
-                event_stream_handler->on_message_received(NULL, aws_last_error(), event_stream_handler->user_data);
-                aws_channel_shutdown(slot->channel, aws_last_error());
+                error_code = aws_last_error();
                 goto finished;
             }
 
@@ -72,8 +74,7 @@ static int s_process_read_message(
 
             if (event_stream_handler->current_message_len > AWS_EVENT_STREAM_MAX_MESSAGE_SIZE) {
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
-                event_stream_handler->on_message_received(NULL, aws_last_error(), event_stream_handler->user_data);
-                aws_channel_shutdown(slot->channel, aws_last_error());
+                error_code = aws_last_error();
                 goto finished;
             }
 
@@ -86,8 +87,7 @@ static int s_process_read_message(
             /* make sure the checksum matches before processing any further */
             if (event_stream_handler->running_crc != prelude_crc) {
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_PRELUDE_CHECKSUM_FAILURE);
-                event_stream_handler->on_message_received(NULL, aws_last_error(), event_stream_handler->user_data);
-                aws_channel_shutdown(slot->channel, aws_last_error());
+                error_code = aws_last_error();
                 goto finished;
             }
         }
@@ -95,13 +95,11 @@ static int s_process_read_message(
         /* read whatever is remaining from the message */
         if (event_stream_handler->message_buf.len < event_stream_handler->current_message_len) {
             size_t remaining = event_stream_handler->current_message_len - event_stream_handler->message_buf.len;
-            size_t to_copy = message_cursor.len > remaining ? remaining : message_cursor.len;
+            size_t to_copy = aws_min_size(message_cursor.len, remaining);
 
-            struct aws_byte_cursor to_append = aws_byte_cursor_from_array(message_cursor.ptr, to_copy);
-            aws_byte_cursor_advance(&message_cursor, to_copy);
+            struct aws_byte_cursor to_append = aws_byte_cursor_advance(&message_cursor, to_copy);
             if (aws_byte_buf_append_dynamic(&event_stream_handler->message_buf, &to_append)) {
-                event_stream_handler->on_message_received(NULL, aws_last_error(), event_stream_handler->user_data);
-                aws_channel_shutdown(slot->channel, aws_last_error());
+                error_code = aws_last_error();
                 goto finished;
             }
         }
@@ -114,26 +112,29 @@ static int s_process_read_message(
 
             if (aws_event_stream_message_from_buffer(
                     &received_message, event_stream_handler->handler.alloc, &event_stream_handler->message_buf)) {
-                event_stream_handler->on_message_received(NULL, aws_last_error(), event_stream_handler->user_data);
-                aws_channel_shutdown(slot->channel, aws_last_error());
+                error_code = aws_last_error();
                 goto finished;
             }
 
             size_t message_size = event_stream_handler->message_buf.len;
             event_stream_handler->on_message_received(
-                &received_message, AWS_OP_SUCCESS, event_stream_handler->user_data);
+                &received_message, AWS_ERROR_SUCCESS, event_stream_handler->user_data);
             aws_event_stream_message_clean_up(&received_message);
             event_stream_handler->current_message_len = 0;
             event_stream_handler->running_crc = 0;
             aws_byte_buf_reset(&event_stream_handler->message_buf, true);
 
-            if (event_stream_handler->automatic_window_management) {
+            if (!event_stream_handler->manual_window_management) {
                 aws_channel_slot_increment_read_window(slot, message_size);
             }
         }
     }
 
 finished:
+    if (error_code) {
+        event_stream_handler->on_message_received(NULL, error_code, event_stream_handler->user_data);
+        aws_channel_shutdown(slot->channel, error_code);
+    }
     aws_mem_release(message->allocator, message);
     return AWS_OP_SUCCESS;
 }
@@ -178,9 +179,10 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
                 handler->handler.slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, message_cur.len);
 
             if (!io_message) {
-                message_data->on_message_written(message, aws_last_error(), message_data->user_data);
+                int error_code = aws_last_error();
+                message_data->on_message_written(message, error_code, message_data->user_data);
                 aws_mem_release(message_data->allocator, message_data);
-                aws_channel_shutdown(handler->handler.slot->channel, aws_last_error());
+                aws_channel_shutdown(handler->handler.slot->channel, error_code);
                 break;
             }
 
@@ -196,9 +198,10 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
              * callback invoked. */
             if (aws_channel_slot_send_message(handler->handler.slot, io_message, AWS_CHANNEL_DIR_WRITE)) {
                 aws_mem_release(io_message->allocator, io_message);
-                message_data->on_message_written(message, aws_last_error(), message_data->user_data);
+                int error_code = aws_last_error();
+                message_data->on_message_written(message, error_code, message_data->user_data);
                 aws_mem_release(message_data->allocator, message_data);
-                aws_channel_shutdown(handler->handler.slot->channel, aws_last_error());
+                aws_channel_shutdown(handler->handler.slot->channel, error_code);
                 break;
             }
         }
@@ -224,6 +227,7 @@ int aws_event_stream_channel_handler_write_message(
         aws_mem_calloc(handler->handler.alloc, 1, sizeof(struct message_write_data));
 
     if (!write_data) {
+        aws_channel_shutdown(channel_handler->slot->channel, aws_last_error());
         return AWS_OP_ERR;
     }
 
@@ -233,14 +237,9 @@ int aws_event_stream_channel_handler_write_message(
     write_data->on_message_written = on_message_written;
     write_data->allocator = handler->handler.alloc;
 
-    /* force it into the correct thread. */
-    if (aws_channel_thread_is_callers_thread(handler->handler.slot->channel)) {
-        s_write_handler_message(&write_data->task, write_data, AWS_TASK_STATUS_RUN_READY);
-    } else {
-        aws_channel_task_init(
-            &write_data->task, s_write_handler_message, write_data, "aws_event_stream_channel_handler_write_message");
-        aws_channel_schedule_task_now(handler->handler.slot->channel, &write_data->task);
-    }
+    aws_channel_task_init(
+        &write_data->task, s_write_handler_message, write_data, "aws_event_stream_channel_handler_write_message");
+    aws_channel_schedule_task_now(handler->handler.slot->channel, &write_data->task);
 
     return AWS_OP_SUCCESS;
 }
@@ -263,26 +262,30 @@ static void s_update_window_task(struct aws_channel_task *task, void *arg, enum 
     aws_mem_release(update_data->allocator, update_data);
 }
 
-int aws_event_stream_channel_handler_increment_read_window(
+void aws_event_stream_channel_handler_increment_read_window(
     struct aws_channel_handler *channel_handler,
     size_t window_update_size) {
     AWS_PRECONDITION(channel_handler);
 
     struct aws_event_stream_channel_handler *handler = channel_handler->impl;
 
-    if (handler->automatic_window_management) {
-        return AWS_OP_SUCCESS;
+    if (!handler->manual_window_management) {
+        return;
     }
 
     if (aws_channel_thread_is_callers_thread(handler->handler.slot->channel)) {
-        return aws_channel_slot_increment_read_window(handler->handler.slot, window_update_size);
+        if (aws_channel_slot_increment_read_window(handler->handler.slot, window_update_size)) {
+            aws_channel_shutdown(handler->handler.slot->channel, aws_last_error());
+            return;
+        }
     }
 
     struct window_update_data *update_data =
         aws_mem_calloc(handler->handler.alloc, 1, sizeof(struct window_update_data));
 
     if (!update_data) {
-        return AWS_OP_ERR;
+        aws_channel_shutdown(handler->handler.slot->channel, aws_last_error());
+        return;
     }
 
     update_data->allocator = handler->handler.alloc;
@@ -295,7 +298,6 @@ int aws_event_stream_channel_handler_increment_read_window(
         update_data,
         "aws_event_stream_channel_handler_increment_read_window");
     aws_channel_schedule_task_now(handler->handler.slot->channel, &update_data->task);
-    return AWS_OP_SUCCESS;
 }
 
 static int s_process_write_message(
@@ -374,7 +376,7 @@ struct aws_channel_handler *aws_event_stream_channel_handler_new(
     event_stream_handler->user_data = handler_options->user_data;
     event_stream_handler->initial_window_size =
         handler_options->initial_window_size > 0 ? handler_options->initial_window_size : SIZE_MAX;
-    event_stream_handler->automatic_window_management = handler_options->automatic_window_management;
+    event_stream_handler->manual_window_management = handler_options->manual_window_management;
     event_stream_handler->handler.vtable = &vtable;
     event_stream_handler->handler.alloc = allocator;
     event_stream_handler->handler.impl = event_stream_handler;
