@@ -74,8 +74,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SOVERSION 0unstable)
 
-aws_use_package(aws-checksums)
 aws_use_package(aws-c-io)
+aws_use_package(aws-checksums)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 
