@@ -52,6 +52,7 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
 }
 
 static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result, void *ctx) {
+    (void)allocator;
     struct test_data *test_data = ctx;
 
     if (!setup_result) {
@@ -339,6 +340,7 @@ AWS_TEST_CASE_FIXTURE(
 
 /* send various valid messages in serial to make sure the happy path of message parsing is correct. */
 static int s_test_channel_handler_corrupted_crc_fails(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
     struct test_data *test_data = ctx;
 
     struct single_message_test_data message_test_data;
@@ -383,6 +385,8 @@ AWS_TEST_CASE_FIXTURE(
 
 /* send various valid messages in serial to make sure the happy path of message parsing is correct. */
 static int s_test_channel_handler_msg_too_large_fails(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
+
     struct test_data *test_data = ctx;
 
     struct single_message_test_data message_test_data;
