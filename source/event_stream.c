@@ -63,7 +63,7 @@ void aws_event_stream_library_clean_up(void) {
     if (s_event_stream_library_initialized) {
         s_event_stream_library_initialized = false;
         aws_unregister_error_info(&s_list);
-        aws_common_library_clean_up();
+        aws_io_library_clean_up();
     }
 }
 
