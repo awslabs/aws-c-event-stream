@@ -57,8 +57,9 @@ AWS_EVENT_STREAM_API struct aws_channel_handler *aws_event_stream_channel_handle
     const struct aws_event_stream_channel_handler_options *handler_options);
 
 /**
- * Writes an aws_event_stream_message() to the channel. Once the channel flushes or an error ocdcurs, on_message_written
- * will be invoked. message should stay valid until the callback is invoked.
+ * Writes an aws_event_stream_message() to the channel. Once the channel flushes or an error occurs, on_message_written
+ * will be invoked. message should stay valid until the callback is invoked. If an error an occurs, the channel will
+ * automatically be shutdown.
  */
 AWS_EVENT_STREAM_API int aws_event_stream_channel_handler_write_message(
     struct aws_channel_handler *handler,
