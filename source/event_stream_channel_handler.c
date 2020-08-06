@@ -244,6 +244,11 @@ int aws_event_stream_channel_handler_write_message(
     return AWS_OP_SUCCESS;
 }
 
+void *aws_event_stream_channel_handler_get_user_data(struct aws_channel_handler *channel_handler) {
+    struct aws_event_stream_channel_handler *handler = channel_handler->impl;
+    return handler->user_data;
+}
+
 struct window_update_data {
     struct aws_allocator *allocator;
     struct aws_channel_task task;
