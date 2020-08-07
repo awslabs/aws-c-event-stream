@@ -271,6 +271,14 @@ AWS_EVENT_STREAM_API int aws_event_stream_add_string_header(
     uint16_t value_len,
     int8_t copy);
 
+AWS_EVENT_STREAM_API struct aws_event_stream_header_value_pair aws_event_stream_create_string_header(
+    struct aws_byte_cursor name,
+    struct aws_byte_cursor value);
+
+AWS_EVENT_STREAM_API struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
+    struct aws_byte_cursor name,
+    int32_t value);
+
 /**
  * Adds a byte header to the list of headers.
  */
