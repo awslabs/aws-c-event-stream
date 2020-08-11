@@ -207,6 +207,7 @@ struct aws_event_stream_rpc_connection *aws_event_stream_rpc_server_connection_f
     connection->on_incoming_stream = connection_options->on_incoming_stream;
     connection->on_connection_protocol_message = connection_options->on_connection_protocol_message;
     connection->user_data = connection_options->user_data;
+    aws_event_stream_rpc_server_connection_acquire(connection);
 
     return connection;
 }
@@ -249,6 +250,7 @@ static void s_on_accept_channel_setup(
         struct aws_event_stream_rpc_connection_options connection_options;
         AWS_ZERO_STRUCT(connection_options);
 
+        aws_event_stream_rpc_server_connection_acquire(connection);
         server->on_new_connection(connection, AWS_ERROR_SUCCESS, &connection_options, server->user_data);
         AWS_FATAL_ASSERT(
             connection_options.on_connection_protocol_message && "on_connection_protocol_message must be specified!");
@@ -257,6 +259,8 @@ static void s_on_accept_channel_setup(
         connection->on_connection_protocol_message = connection_options.on_connection_protocol_message;
         connection->user_data = connection_options.user_data;
         connection->bootstrap_owned = true;
+        aws_event_stream_rpc_server_connection_release(connection);
+
     } else {
         server->on_new_connection(NULL, error_code, NULL, server->user_data);
     }
@@ -288,7 +292,9 @@ static void s_on_accept_channel_shutdown(
     struct aws_event_stream_rpc_connection *connection = s_rpc_connection_from_channel(channel);
     aws_atomic_store_int(&connection->is_closed, 1U);
     aws_hash_table_clear(&connection->continuation_table);
+    aws_event_stream_rpc_server_connection_acquire(connection);
     server->on_connection_shutdown(connection, error_code, server->user_data);
+    aws_event_stream_rpc_server_connection_release(connection);
     aws_event_stream_rpc_server_connection_release(connection);
 }
 
@@ -716,7 +722,8 @@ static void s_route_message_by_type(
 
         if (stream_id <= connection->latest_stream_id) {
             struct aws_hash_element *continuation_element = NULL;
-            if (aws_hash_table_find(&connection->continuation_table, &stream_id, &continuation_element)) {
+            if (aws_hash_table_find(&connection->continuation_table, &stream_id, &continuation_element) ||
+                !continuation_element) {
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_client_stream_id_error);
@@ -724,7 +731,9 @@ static void s_route_message_by_type(
             }
 
             continuation = continuation_element->value;
+            aws_event_stream_rpc_server_continuation_acquire(continuation);
             continuation->continuation_fn(continuation, &message_args, continuation->user_data);
+            aws_event_stream_rpc_server_continuation_release(continuation);
         } else {
             if (stream_id != connection->latest_stream_id + 1) {
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
@@ -768,6 +777,7 @@ static void s_route_message_by_type(
             struct aws_event_stream_rpc_server_stream_continuation_options options;
             AWS_ZERO_STRUCT(options);
 
+            aws_event_stream_rpc_server_continuation_acquire(continuation);
             connection->on_incoming_stream(continuation, operation_name, &options, connection->user_data);
             AWS_FATAL_ASSERT(options.on_continuation);
             AWS_FATAL_ASSERT(options.on_continuation_closed);
@@ -778,6 +788,7 @@ static void s_route_message_by_type(
 
             connection->latest_stream_id = stream_id;
             continuation->continuation_fn(continuation, &message_args, continuation->user_data);
+            aws_event_stream_rpc_server_continuation_release(continuation);
         }
 
         /* if it was a terminal stream message purge it from the hash table. The delete will decref the continuation. */

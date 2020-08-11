@@ -632,7 +632,7 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
     AWS_PRECONDITION(name.len < INT8_MAX);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
+        .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
         .header_value_len = sizeof(int32_t),
         .header_name_len = name.len,
         .value_owned = 0,
