@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/condition_variable.h>
 #include <aws/common/macros.h>
-#include <aws/event-stream/event_stream_rpc_server.h>
+#include <aws/common/mutex.h>
+#include <aws/event-stream/private/event_stream_rpc_test_helper.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/socket.h>
 
@@ -24,6 +26,9 @@ struct test_data {
     aws_event_stream_rpc_server_stream_continuation_closed_fn *on_continuation_closed;
     void *user_data;
     void *continuation_user_data;
+    struct aws_mutex shutdown_lock;
+    struct aws_condition_variable shutdown_cvar;
+    bool shutdown_completed;
 };
 
 static struct test_data s_test_data;
@@ -89,6 +94,15 @@ static void s_fixture_on_connection_shutdown(
     (void)user_data;
 }
 
+static void s_on_listener_destroy(struct aws_event_stream_rpc_server_listener *server, void *user_data) {
+    (void)server;
+    struct test_data *test_data = user_data;
+    aws_mutex_lock(&test_data->shutdown_lock);
+    test_data->shutdown_completed = true;
+    aws_mutex_unlock(&test_data->shutdown_lock);
+    aws_condition_variable_notify_one(&test_data->shutdown_cvar);
+}
+
 static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     aws_event_stream_library_init(allocator);
     struct test_data *test_data = ctx;
@@ -97,6 +111,9 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     ASSERT_SUCCESS(aws_event_loop_group_default_init(&test_data->el_group, allocator, 0));
     test_data->bootstrap = aws_server_bootstrap_new(allocator, &test_data->el_group);
     ASSERT_NOT_NULL(test_data->bootstrap);
+
+    ASSERT_SUCCESS(aws_mutex_init(&test_data->shutdown_lock));
+    ASSERT_SUCCESS(aws_condition_variable_init(&test_data->shutdown_cvar));
 
     struct aws_socket_options socket_options = {
         .connect_timeout_ms = 3000,
@@ -112,6 +129,7 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .user_data = test_data,
         .on_new_connection = s_fixture_on_new_connection,
         .on_connection_shutdown = s_fixture_on_connection_shutdown,
+        .on_destroy_callback = s_on_listener_destroy,
     };
 
     test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
@@ -139,6 +157,11 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     return AWS_OP_SUCCESS;
 }
 
+static bool s_shutdown_predicate_fn(void *user_data) {
+    struct test_data *test_data = user_data;
+    return test_data->shutdown_completed;
+}
+
 static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result, void *ctx) {
     (void)allocator;
     struct test_data *test_data = ctx;
@@ -147,8 +170,14 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
         aws_event_stream_rpc_server_connection_release(test_data->connection);
         testing_channel_clean_up(&test_data->testing_channel);
         aws_event_stream_rpc_server_listener_release(test_data->listener);
+        aws_mutex_lock(&test_data->shutdown_lock);
+        aws_condition_variable_wait_pred(
+            &test_data->shutdown_cvar, &test_data->shutdown_lock, s_shutdown_predicate_fn, test_data);
+        aws_mutex_unlock(&test_data->shutdown_lock);
         aws_server_bootstrap_release(test_data->bootstrap);
         aws_event_loop_group_clean_up(&test_data->el_group);
+        aws_mutex_clean_up(&test_data->shutdown_lock);
+        aws_condition_variable_clean_up(&test_data->shutdown_cvar);
     }
 
     aws_event_stream_library_clean_up();
@@ -172,7 +201,7 @@ AWS_TEST_CASE_FIXTURE(
     s_fixture_shutdown,
     &s_test_data)
 
-struct recieved_protocol_message_data {
+struct received_protocol_message_data {
     struct aws_allocator *allocator;
     enum aws_event_stream_rpc_message_type message_type;
     int message_flags;
@@ -188,29 +217,23 @@ static void s_on_recieved_protocol_message(
     struct aws_event_stream_rpc_connection *connection,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data) {
-    struct recieved_protocol_message_data *message_data = user_data;
+    struct received_protocol_message_data *message_data = user_data;
     message_data->message_type = message_args->message_type;
     message_data->message_flags = message_args->message_flags;
     aws_byte_buf_init_copy(&message_data->payload_cpy, message_data->allocator, message_args->payload);
 }
 
 static void s_on_message_flush_fn(int error_code, void *user_data) {
-    struct recieved_protocol_message_data *message_data = user_data;
+    struct received_protocol_message_data *message_data = user_data;
 
     message_data->message_flushed = true;
     message_data->message_flush_err_code = AWS_ERROR_SUCCESS;
 }
 
-static int s_test_event_stream_rpc_server_connection_connect_flow(struct aws_allocator *allocator, void *ctx) {
-    struct test_data *test_data = ctx;
-
-    struct recieved_protocol_message_data message_data = {
-        .allocator = allocator,
-    };
-
-    test_data->user_data = &message_data;
-    test_data->received_fn = s_on_recieved_protocol_message;
-
+static int s_do_connect(
+    struct aws_allocator *allocator,
+    struct test_data *test_data,
+    struct received_protocol_message_data *message_data) {
     struct aws_byte_buf payload = aws_byte_buf_from_c_str("test connect message payload");
 
     struct aws_array_list headers_list;
@@ -240,14 +263,14 @@ static int s_test_event_stream_rpc_server_connection_connect_flow(struct aws_all
     ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
     testing_channel_drain_queued_tasks(&test_data->testing_channel);
 
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, message_data.message_type);
-    ASSERT_INT_EQUALS(0, message_data.message_flags);
+    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, message_data->message_type);
+    ASSERT_INT_EQUALS(0, message_data->message_flags);
     ASSERT_BIN_ARRAYS_EQUALS(
-        payload.buffer, payload.len, message_data.payload_cpy.buffer, message_data.payload_cpy.len);
+        payload.buffer, payload.len, message_data->payload_cpy.buffer, message_data->payload_cpy.len);
 
     aws_event_stream_message_clean_up(&message);
-    aws_event_stream_headers_list_cleanup(&headers_list);
-    aws_byte_buf_clean_up(&message_data.payload_cpy);
+    aws_array_list_clear(&headers_list);
+    aws_byte_buf_clean_up(&message_data->payload_cpy);
 
     struct aws_event_stream_rpc_message_args connect_ack_args = {
         .message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED,
@@ -256,13 +279,53 @@ static int s_test_event_stream_rpc_server_connection_connect_flow(struct aws_all
     };
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->connection, &connect_ack_args, s_on_message_flush_fn, &message_data));
+        test_data->connection, &connect_ack_args, s_on_message_flush_fn, message_data));
     testing_channel_drain_queued_tasks(&test_data->testing_channel);
 
-    ASSERT_TRUE(message_data.message_flushed);
-    ASSERT_INT_EQUALS(0, message_data.message_flush_err_code);
+    ASSERT_TRUE(message_data->message_flushed);
+    ASSERT_INT_EQUALS(0, message_data->message_flush_err_code);
 
     ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+
+    struct aws_byte_buf connect_ack_data;
+    ASSERT_SUCCESS(aws_byte_buf_init(&connect_ack_data, allocator, 1024));
+    testing_channel_drain_written_messages(&test_data->testing_channel, &connect_ack_data);
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, allocator, &connect_ack_data));
+    aws_byte_buf_clean_up(&connect_ack_data);
+
+    ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers_list));
+
+    enum aws_event_stream_rpc_message_type message_type = -1;
+
+    for (size_t i = 0; aws_array_list_length(&headers_list); ++i) {
+        struct aws_event_stream_header_value_pair *header = NULL;
+        aws_array_list_get_at_ptr(&headers_list, (void **)&header, i);
+
+        struct aws_byte_cursor header_name = aws_byte_cursor_from_array(header->header_name, header->header_name_len);
+
+        if (aws_byte_cursor_eq(&aws_event_stream_rpc_message_type_name, &header_name)) {
+            message_type = aws_event_stream_header_value_as_int32(header);
+            break;
+        }
+    }
+
+    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, message_type);
+    aws_array_list_clean_up(&headers_list);
+
+    return AWS_OP_SUCCESS;
+}
+
+static int s_test_event_stream_rpc_server_connection_connect_flow(struct aws_allocator *allocator, void *ctx) {
+    struct test_data *test_data = ctx;
+
+    struct received_protocol_message_data message_data = {
+        .allocator = allocator,
+    };
+
+    test_data->user_data = &message_data;
+    test_data->received_fn = s_on_recieved_protocol_message;
+
+    ASSERT_SUCCESS(s_do_connect(allocator, test_data, &message_data));
     aws_event_stream_rpc_server_connection_close(test_data->connection, AWS_ERROR_SUCCESS);
 
     return AWS_OP_SUCCESS;
@@ -278,7 +341,7 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_server_connection_connect_reject_flow(struct aws_allocator *allocator, void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -354,7 +417,7 @@ static int s_test_event_stream_rpc_server_connection_messages_before_connect_rec
     void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -443,7 +506,7 @@ static int s_test_event_stream_rpc_server_connection_messages_before_connect_ack
     void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -564,7 +627,7 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_server_connection_unknown_message_type(struct aws_allocator *allocator, void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -649,7 +712,7 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_server_connection_missing_message_type(struct aws_allocator *allocator, void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -729,7 +792,7 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_server_connection_missing_message_flags(struct aws_allocator *allocator, void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -809,7 +872,7 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_server_connection_missing_stream_id(struct aws_allocator *allocator, void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -846,17 +909,14 @@ static int s_test_event_stream_rpc_server_connection_missing_stream_id(struct aw
 
     ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
 
-    struct aws_linked_list *message_queue = testing_channel_get_written_message_queue(&test_data->testing_channel);
-    ASSERT_FALSE(aws_linked_list_empty(message_queue));
-
-    struct aws_linked_list_node *written_message_node = aws_linked_list_front(message_queue);
-    struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
-
-    struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    struct aws_byte_buf connect_ack_data;
+    ASSERT_SUCCESS(aws_byte_buf_init(&connect_ack_data, allocator, 1024));
+    testing_channel_drain_written_messages(&test_data->testing_channel, &connect_ack_data);
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, allocator, &connect_ack_data));
+    aws_byte_buf_clean_up(&connect_ack_data);
     aws_array_list_clear(&headers_list);
 
-    ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
+    ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers_list));
 
     enum aws_event_stream_rpc_message_type message_type = -1;
 
@@ -873,7 +933,7 @@ static int s_test_event_stream_rpc_server_connection_missing_stream_id(struct aw
     }
 
     aws_event_stream_headers_list_cleanup(&headers_list);
-    aws_event_stream_message_clean_up(&written_message);
+    aws_event_stream_message_clean_up(&message);
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, message_type);
 
     return AWS_OP_SUCCESS;
@@ -893,7 +953,7 @@ static void s_on_incoming_stream(
     void *user_data) {
     (void)continuation_options;
 
-    struct recieved_protocol_message_data *message_data = user_data;
+    struct received_protocol_message_data *message_data = user_data;
     message_data->continuation_token = token;
     aws_event_stream_rpc_server_continuation_acquire(token);
     aws_byte_buf_init_copy_from_cursor(
@@ -904,14 +964,14 @@ static void s_on_continuation_message(
     struct aws_event_stream_rpc_server_continuation_token *token,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data) {
-    struct recieved_protocol_message_data *message_data = user_data;
+    struct received_protocol_message_data *message_data = user_data;
     message_data->message_type = message_args->message_type;
     message_data->message_flags = message_args->message_flags;
     aws_byte_buf_init_copy(&message_data->payload_cpy, message_data->allocator, message_args->payload);
 }
 
 static void s_on_continuation_closed(struct aws_event_stream_rpc_server_continuation_token *token, void *user_data) {
-    struct recieved_protocol_message_data *message_data = user_data;
+    struct received_protocol_message_data *message_data = user_data;
     message_data->continuation_closed = true;
 }
 
@@ -920,7 +980,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_messages_flow(
     void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -931,57 +991,11 @@ static int s_test_event_stream_rpc_server_connection_continuation_messages_flow(
     test_data->on_continuation_closed = s_on_continuation_closed;
     test_data->on_new_stream = s_on_incoming_stream;
 
-    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test connect message payload");
+    s_do_connect(allocator, test_data, &message_data);
 
-    struct aws_array_list headers_list;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
-
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_type_name.ptr,
-        aws_event_stream_rpc_message_type_name.len,
-        AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_flags_name.ptr,
-        aws_event_stream_rpc_message_flags_name.len,
-        0));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_stream_id_name.ptr,
-        aws_event_stream_rpc_stream_id_name.len,
-        0));
-
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test operation payload!");
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
-
-    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
-        aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
-    ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, message_data.message_type);
-    ASSERT_INT_EQUALS(0, message_data.message_flags);
-    ASSERT_BIN_ARRAYS_EQUALS(
-        payload.buffer, payload.len, message_data.payload_cpy.buffer, message_data.payload_cpy.len);
-
-    aws_event_stream_message_clean_up(&message);
-    aws_event_stream_headers_list_cleanup(&headers_list);
-    aws_byte_buf_clean_up(&message_data.payload_cpy);
-
-    struct aws_event_stream_rpc_message_args connect_ack_args = {
-        .message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED,
-        .message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK,
-        .payload = &payload,
-    };
-
-    ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->connection, &connect_ack_args, s_on_message_flush_fn, &message_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_TRUE(message_data.message_flushed);
-    ASSERT_INT_EQUALS(0, message_data.message_flush_err_code);
-
+    struct aws_array_list headers_list;
     ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
 
     struct aws_byte_cursor operation_name = aws_byte_cursor_from_c_str("testOperation");
@@ -1010,7 +1024,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_messages_flow(
 
     ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
 
-    send_data = aws_byte_cursor_from_array(
+    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
         aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
     ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
     testing_channel_drain_queued_tasks(&test_data->testing_channel);
@@ -1161,7 +1175,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_missing_operat
     void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -1172,61 +1186,11 @@ static int s_test_event_stream_rpc_server_connection_continuation_missing_operat
     test_data->on_continuation_closed = s_on_continuation_closed;
     test_data->on_new_stream = s_on_incoming_stream;
 
-    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test connect message payload");
+    s_do_connect(allocator, test_data, &message_data);
 
-    struct aws_array_list headers_list;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
-
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_type_name.ptr,
-        aws_event_stream_rpc_message_type_name.len,
-        AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_flags_name.ptr,
-        aws_event_stream_rpc_message_flags_name.len,
-        0));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_stream_id_name.ptr,
-        aws_event_stream_rpc_stream_id_name.len,
-        0));
-
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test operation payload!");
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
-
-    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
-        aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
-    ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, message_data.message_type);
-    ASSERT_INT_EQUALS(0, message_data.message_flags);
-    ASSERT_BIN_ARRAYS_EQUALS(
-        payload.buffer, payload.len, message_data.payload_cpy.buffer, message_data.payload_cpy.len);
-
-    aws_event_stream_message_clean_up(&message);
-    aws_event_stream_headers_list_cleanup(&headers_list);
-    aws_byte_buf_clean_up(&message_data.payload_cpy);
-
-    struct aws_event_stream_rpc_message_args connect_ack_args = {
-        .message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED,
-        .message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK,
-        .payload = &payload,
-    };
-
-    ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->connection, &connect_ack_args, s_on_message_flush_fn, &message_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_TRUE(message_data.message_flushed);
-    ASSERT_INT_EQUALS(0, message_data.message_flush_err_code);
-
-    struct aws_byte_buf dummy_buf;
-    aws_byte_buf_init(&dummy_buf, allocator, 1024);
-    testing_channel_drain_written_messages(&test_data->testing_channel, &dummy_buf);
-    aws_byte_buf_clean_up(&dummy_buf);
+    struct aws_array_list headers_list;
 
     ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
 
@@ -1248,7 +1212,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_missing_operat
 
     ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
 
-    send_data = aws_byte_cursor_from_array(
+    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
         aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
     ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
     testing_channel_drain_queued_tasks(&test_data->testing_channel);
@@ -1302,7 +1266,7 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_server_connection_stream_id_ahead(struct aws_allocator *allocator, void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -1313,61 +1277,11 @@ static int s_test_event_stream_rpc_server_connection_stream_id_ahead(struct aws_
     test_data->on_continuation_closed = s_on_continuation_closed;
     test_data->on_new_stream = s_on_incoming_stream;
 
-    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test connect message payload");
+    s_do_connect(allocator, test_data, &message_data);
 
-    struct aws_array_list headers_list;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
-
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_type_name.ptr,
-        aws_event_stream_rpc_message_type_name.len,
-        AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_flags_name.ptr,
-        aws_event_stream_rpc_message_flags_name.len,
-        0));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_stream_id_name.ptr,
-        aws_event_stream_rpc_stream_id_name.len,
-        0));
-
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test operation payload!");
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
-
-    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
-        aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
-    ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, message_data.message_type);
-    ASSERT_INT_EQUALS(0, message_data.message_flags);
-    ASSERT_BIN_ARRAYS_EQUALS(
-        payload.buffer, payload.len, message_data.payload_cpy.buffer, message_data.payload_cpy.len);
-
-    aws_event_stream_message_clean_up(&message);
-    aws_event_stream_headers_list_cleanup(&headers_list);
-    aws_byte_buf_clean_up(&message_data.payload_cpy);
-
-    struct aws_event_stream_rpc_message_args connect_ack_args = {
-        .message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED,
-        .message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK,
-        .payload = &payload,
-    };
-
-    ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->connection, &connect_ack_args, s_on_message_flush_fn, &message_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_TRUE(message_data.message_flushed);
-    ASSERT_INT_EQUALS(0, message_data.message_flush_err_code);
-
-    struct aws_byte_buf dummy_buf;
-    aws_byte_buf_init(&dummy_buf, allocator, 1024);
-    testing_channel_drain_written_messages(&test_data->testing_channel, &dummy_buf);
-    aws_byte_buf_clean_up(&dummy_buf);
+    struct aws_array_list headers_list;
 
     ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
 
@@ -1397,7 +1311,7 @@ static int s_test_event_stream_rpc_server_connection_stream_id_ahead(struct aws_
 
     ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
 
-    send_data = aws_byte_cursor_from_array(
+    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
         aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
     ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
     testing_channel_drain_queued_tasks(&test_data->testing_channel);
@@ -1453,7 +1367,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_reused_stream_
     void *ctx) {
     struct test_data *test_data = ctx;
 
-    struct recieved_protocol_message_data message_data = {
+    struct received_protocol_message_data message_data = {
         .allocator = allocator,
     };
 
@@ -1464,56 +1378,11 @@ static int s_test_event_stream_rpc_server_connection_continuation_reused_stream_
     test_data->on_continuation_closed = s_on_continuation_closed;
     test_data->on_new_stream = s_on_incoming_stream;
 
-    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test connect message payload");
+    s_do_connect(allocator, test_data, &message_data);
 
-    struct aws_array_list headers_list;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
-
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_type_name.ptr,
-        aws_event_stream_rpc_message_type_name.len,
-        AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_message_flags_name.ptr,
-        aws_event_stream_rpc_message_flags_name.len,
-        0));
-    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
-        &headers_list,
-        (const char *)aws_event_stream_rpc_stream_id_name.ptr,
-        aws_event_stream_rpc_stream_id_name.len,
-        0));
-
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test operation payload!");
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
-
-    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
-        aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
-    ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, message_data.message_type);
-    ASSERT_INT_EQUALS(0, message_data.message_flags);
-    ASSERT_BIN_ARRAYS_EQUALS(
-        payload.buffer, payload.len, message_data.payload_cpy.buffer, message_data.payload_cpy.len);
-
-    aws_event_stream_message_clean_up(&message);
-    aws_event_stream_headers_list_cleanup(&headers_list);
-    aws_byte_buf_clean_up(&message_data.payload_cpy);
-
-    struct aws_event_stream_rpc_message_args connect_ack_args = {
-        .message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED,
-        .message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK,
-        .payload = &payload,
-    };
-
-    ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->connection, &connect_ack_args, s_on_message_flush_fn, &message_data));
-    testing_channel_drain_queued_tasks(&test_data->testing_channel);
-
-    ASSERT_TRUE(message_data.message_flushed);
-    ASSERT_INT_EQUALS(0, message_data.message_flush_err_code);
+    struct aws_array_list headers_list;
 
     ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
 
@@ -1543,7 +1412,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_reused_stream_
 
     ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
 
-    send_data = aws_byte_cursor_from_array(
+    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
         aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
     ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
     testing_channel_drain_queued_tasks(&test_data->testing_channel);
@@ -1719,5 +1588,101 @@ AWS_TEST_CASE_FIXTURE(
     test_event_stream_rpc_server_connection_continuation_reused_stream_id_fails,
     s_fixture_setup,
     s_test_event_stream_rpc_server_connection_continuation_reused_stream_id_fails,
+    s_fixture_shutdown,
+    &s_test_data)
+
+static int s_test_event_stream_rpc_server_connection_continuation_max_stream_id_reached(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    struct test_data *test_data = ctx;
+
+    struct received_protocol_message_data message_data = {
+        .allocator = allocator,
+    };
+
+    test_data->user_data = &message_data;
+    test_data->received_fn = s_on_recieved_protocol_message;
+    test_data->continuation_user_data = &message_data;
+    test_data->on_continuation = s_on_continuation_message;
+    test_data->on_continuation_closed = s_on_continuation_closed;
+    test_data->on_new_stream = s_on_incoming_stream;
+
+    s_do_connect(allocator, test_data, &message_data);
+
+    aws_event_stream_rpc_server_override_last_stream_id(test_data->connection, INT32_MAX);
+
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test operation payload!");
+    struct aws_event_stream_message message;
+    struct aws_array_list headers_list;
+
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
+
+    struct aws_byte_cursor operation_name = aws_byte_cursor_from_c_str("testOperation");
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_message_type_name.ptr,
+        aws_event_stream_rpc_message_type_name.len,
+        AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_MESSAGE));
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_message_flags_name.ptr,
+        aws_event_stream_rpc_message_flags_name.len,
+        0));
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_stream_id_name.ptr,
+        aws_event_stream_rpc_stream_id_name.len,
+        (int32_t)((uint32_t)(INT32_MAX) + 1)));
+    ASSERT_SUCCESS(aws_event_stream_add_string_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_operation_name.ptr,
+        aws_event_stream_rpc_operation_name.len,
+        (const char *)operation_name.ptr,
+        operation_name.len,
+        0));
+
+    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
+
+    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
+        aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
+    ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
+    testing_channel_drain_queued_tasks(&test_data->testing_channel);
+    aws_event_stream_message_clean_up(&message);
+    aws_array_list_clear(&headers_list);
+
+    ASSERT_NULL(message_data.continuation_token);
+
+    struct aws_byte_buf final_message;
+    ASSERT_SUCCESS(aws_byte_buf_init(&final_message, allocator, 1024));
+    testing_channel_drain_written_messages(&test_data->testing_channel, &final_message);
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, allocator, &final_message));
+    aws_byte_buf_clean_up(&final_message);
+    ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers_list));
+
+    bool message_type_found = false;
+
+    for (size_t i = 0; i < aws_array_list_length(&headers_list); ++i) {
+        struct aws_event_stream_header_value_pair *header = NULL;
+        aws_array_list_get_at_ptr(&headers_list, (void **)&header, i);
+
+        struct aws_byte_cursor header_name = aws_byte_cursor_from_array(header->header_name, header->header_name_len);
+
+        if (aws_byte_cursor_eq(&aws_event_stream_rpc_message_type_name, &header_name)) {
+            message_type_found = true;
+            ASSERT_INT_EQUALS(
+                AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, aws_event_stream_header_value_as_int32(header));
+        }
+    }
+
+    aws_event_stream_headers_list_cleanup(&headers_list);
+    aws_event_stream_message_clean_up(&message);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    test_event_stream_rpc_server_connection_continuation_max_stream_id_reached,
+    s_fixture_setup,
+    s_test_event_stream_rpc_server_connection_continuation_max_stream_id_reached,
     s_fixture_shutdown,
     &s_test_data)

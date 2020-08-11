@@ -29,8 +29,9 @@ static const struct aws_byte_cursor s_json_content_type_name = AWS_BYTE_CUR_INIT
 static const struct aws_byte_cursor s_json_content_type_value =
     AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("application/json");
 
-static const struct aws_byte_cursor s_invalid_stream_id_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"non-zero stream-id field is only allowed for messages of type APPLICATION_MESSAGE\"; }");
+static const struct aws_byte_cursor s_invalid_stream_id_error =
+    AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("{ \"message\": \"non-zero stream-id field is only allowed for messages of "
+                                          "type APPLICATION_MESSAGE. The stream id max value is INT32_MAX.\"; }");
 
 static const struct aws_byte_cursor s_invalid_client_stream_id_error =
     AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("{ \"message\": \"stream-id values must be monotonically incrementing. A "
@@ -50,12 +51,13 @@ static const struct aws_byte_cursor s_server_error = AWS_BYTE_CUR_INIT_FROM_STRI
     "{ \"message\": \"an error occurred on the server. This is not likely caused by your client.\"; }");
 
 static const struct aws_byte_cursor s_invalid_message_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"A message was recieved with missing required fields. Check that your client is sending at least, "
+    "{ \"message\": \"A message was received with missing required fields. Check that your client is sending at least, "
     ":message-type, :message-flags, and :stream-id\"; }");
 
 static const struct aws_byte_cursor s_connect_not_completed_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
     "{ \"message\": \"A CONNECT message must be received, and the CONNECT_ACK must be sent in response, before any "
-    "other message-types can be sent on this connection.\" }");
+    "other message-types can be sent on this connection. In addition, only one CONNECT message is allowed on a "
+    "connection.\" }");
 
 /* this is a repurposed hash function based on the technique in splitmix64. The magic number was a result of numerical
  * analysis on maximum bit entropy. */
@@ -68,7 +70,7 @@ static uint64_t s_hash_uint32(const void *to_hash) {
 }
 
 static bool s_uint32_eq(const void *a, const void *b) {
-    return *(const int32_t *)a == *(const int32_t *)b;
+    return *(const uint32_t *)a == *(const uint32_t *)b;
 }
 
 struct aws_event_stream_rpc_server_listener {
@@ -110,6 +112,9 @@ struct aws_event_stream_rpc_server_continuation_token {
     struct aws_atomic_var is_closed;
 };
 
+/** This is the destructor callback invoked by the connections continuation table when a continuation is removed
+ * from the hash table.
+ */
 void s_continuation_destroy(void *value) {
     struct aws_event_stream_rpc_server_continuation_token *continuation = value;
     continuation->closed_fn(continuation, continuation->user_data);
@@ -118,6 +123,8 @@ void s_continuation_destroy(void *value) {
 
 static void s_on_message_received(struct aws_event_stream_message *message, int error_code, void *user_data);
 
+/* We have two paths for creating a connection on a channel. The first is an incoming connection on the server listener.
+ * The second is adding a connection to an already existing channel. This is the code common to both cases. */
 static struct aws_event_stream_rpc_connection *s_create_connection_on_channel(
     struct aws_event_stream_rpc_server_listener *server,
     struct aws_channel *channel) {
@@ -131,6 +138,8 @@ static struct aws_event_stream_rpc_connection *s_create_connection_on_channel(
     }
 
     aws_atomic_init_int(&connection->ref_count, 1);
+    /* handshake step 1 is a connect message being received. Handshake 2 is the connect ack being sent.
+     * no messages other than connect and connect ack are allowed until this count reaches 2. */
     aws_atomic_init_int(&connection->handshake_complete, 0);
     connection->allocator = server->allocator;
 
@@ -227,6 +236,7 @@ void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_
     }
 }
 
+/* incoming from a socket on this listener. */
 static void s_on_accept_channel_setup(
     struct aws_server_bootstrap *bootstrap,
     int error_code,
@@ -266,6 +276,7 @@ static void s_on_accept_channel_setup(
     }
 }
 
+/* this is just to get the connection object off of the channel. */
 static inline struct aws_event_stream_rpc_connection *s_rpc_connection_from_channel(struct aws_channel *channel) {
     struct aws_channel_slot *our_slot = NULL;
     struct aws_channel_slot *current_slot = aws_channel_get_first_slot(channel);
@@ -306,6 +317,8 @@ static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap,
     if (listener->on_destroy_callback) {
         listener->on_destroy_callback(listener, listener->user_data);
     }
+
+    aws_mem_release(listener->allocator, listener);
 }
 
 struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_listener(
@@ -336,6 +349,10 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     server->bootstrap = options->bootstrap;
     server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
     server->allocator = allocator;
+    server->on_destroy_callback = options->on_destroy_callback;
+    server->on_new_connection = options->on_new_connection;
+    server->on_connection_shutdown = options->on_connection_shutdown;
+    server->user_data = options->user_data;
 
     if (!server->listener) {
         goto error;
@@ -358,8 +375,8 @@ void aws_event_stream_rpc_server_listener_acquire(struct aws_event_stream_rpc_se
 
 static void s_destroy_server(struct aws_event_stream_rpc_server_listener *server) {
     if (server) {
+        /* the memory for this is cleaned up in the listener shutdown complete callback. */
         aws_server_bootstrap_destroy_socket_listener(server->bootstrap, server->listener);
-        aws_mem_release(server->allocator, server);
     }
 }
 
@@ -535,6 +552,12 @@ int aws_event_stream_rpc_server_connection_send_protocol_message(
     return s_send_protocol_message(connection, NULL, message_args, 0, flush_fn, user_data);
 }
 
+void aws_event_stream_rpc_server_override_last_stream_id(
+    struct aws_event_stream_rpc_connection *connection,
+    int32_t value) {
+    connection->latest_stream_id = value;
+}
+
 void aws_event_stream_rpc_server_connection_close(
     struct aws_event_stream_rpc_connection *connection,
     int shutdown_error_code) {
@@ -586,6 +609,7 @@ int aws_event_stream_rpc_server_continuation_send_message(
         continuation->connection, continuation, message_args, continuation->stream_id, flush_fn, user_data);
 }
 
+/* just a convenience function for fetching message metadata from the event stream headers on a single iteration. */
 static int s_fetch_message_metadata(
     struct aws_array_list *message_headers,
     int32_t *stream_id,
@@ -683,6 +707,8 @@ static void s_send_connection_level_error(
         connection, &message_args, s_connection_error_message_flush_fn, connection);
 }
 
+/* TODO: come back and make this a proper state pattern. For now it's branches all over the place until we nail
+ * down the spec. */
 static void s_route_message_by_type(
     struct aws_event_stream_rpc_connection *connection,
     struct aws_event_stream_message *message,
@@ -704,6 +730,7 @@ static void s_route_message_by_type(
 
     size_t handshake_complete = aws_atomic_load_int(&connection->handshake_complete);
 
+    /* make sure if this is not a CONNECT message being received, the handshake has been completed. */
     if (handshake_complete < 2 && message_type != AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
         aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
         s_send_connection_level_error(
@@ -711,6 +738,7 @@ static void s_route_message_by_type(
         return;
     }
 
+    /* stream_id being non zero ALWAYS indicates APPLICATION_DATA or APPLICATION_ERROR. */
     if (stream_id > 0) {
         struct aws_event_stream_rpc_server_continuation_token *continuation = NULL;
         if (message_type > AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR) {
@@ -720,6 +748,16 @@ static void s_route_message_by_type(
             return;
         }
 
+        /* INT32_MAX is the max stream id. */
+        if (stream_id > INT32_MAX) {
+            aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
+            s_send_connection_level_error(
+                connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_stream_id_error);
+            return;
+        }
+
+        /* if the stream is is in the past, look it up from the continuation table. If it's not there, that's an error.
+         * if it is, find it and notify the user a message arrived */
         if (stream_id <= connection->latest_stream_id) {
             struct aws_hash_element *continuation_element = NULL;
             if (aws_hash_table_find(&connection->continuation_table, &stream_id, &continuation_element) ||
@@ -734,6 +772,8 @@ static void s_route_message_by_type(
             aws_event_stream_rpc_server_continuation_acquire(continuation);
             continuation->continuation_fn(continuation, &message_args, continuation->user_data);
             aws_event_stream_rpc_server_continuation_release(continuation);
+            /* now these are potentially new streams. Make sure they're in bounds, create a new continuation
+             * and notify the user the stream has been created, then send them the message. */
         } else {
             if (stream_id != connection->latest_stream_id + 1) {
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
@@ -745,6 +785,7 @@ static void s_route_message_by_type(
                 return;
             }
 
+            /* new streams must always have an operation name. */
             if (operation_name.len == 0) {
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
                 s_send_connection_level_error(
@@ -805,6 +846,12 @@ static void s_route_message_by_type(
         }
 
         if (message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
+            if (handshake_complete) {
+                /* only one connect is allowed. This would be a duplicate. */
+                s_send_connection_level_error(
+                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_connect_not_completed_error);
+                return;
+            }
             aws_atomic_store_int(&connection->handshake_complete, 1U);
         }
 
@@ -812,6 +859,7 @@ static void s_route_message_by_type(
     }
 }
 
+/* invoked by the event stream channel handler when a complete message has been read from the channel. */
 static void s_on_message_received(struct aws_event_stream_message *message, int error_code, void *user_data) {
 
     if (!error_code) {
