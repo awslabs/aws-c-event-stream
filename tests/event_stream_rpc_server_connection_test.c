@@ -1674,6 +1674,8 @@ static int s_test_event_stream_rpc_server_connection_continuation_max_stream_id_
         }
     }
 
+    ASSERT_TRUE(message_type_found);
+
     aws_event_stream_headers_list_cleanup(&headers_list);
     aws_event_stream_message_clean_up(&message);
 

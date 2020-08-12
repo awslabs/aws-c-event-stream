@@ -22,9 +22,6 @@
 #include <aws/io/channel.h>
 #include <aws/io/channel_bootstrap.h>
 
-static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;
-static const uint32_t s_bit_shift_magic = 16U;
-
 static const struct aws_byte_cursor s_json_content_type_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(":content-type");
 static const struct aws_byte_cursor s_json_content_type_value =
     AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("application/json");
@@ -58,6 +55,9 @@ static const struct aws_byte_cursor s_connect_not_completed_error = AWS_BYTE_CUR
     "{ \"message\": \"A CONNECT message must be received, and the CONNECT_ACK must be sent in response, before any "
     "other message-types can be sent on this connection. In addition, only one CONNECT message is allowed on a "
     "connection.\" }");
+
+static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;
+static const uint32_t s_bit_shift_magic = 16U;
 
 /* this is a repurposed hash function based on the technique in splitmix64. The magic number was a result of numerical
  * analysis on maximum bit entropy. */
@@ -445,6 +445,8 @@ static int s_send_protocol_message(
 
     size_t connect_handshake_completion = aws_atomic_load_int(&connection->handshake_complete);
 
+    /* handshake step 1 is a connect message being received. Handshake 2 is the connect ack being sent.
+     * no messages other than connect and connect ack are allowed until this count reaches 2. */
     if (connect_handshake_completion != 2 &&
         message_args->message_type < AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
@@ -461,6 +463,7 @@ static int s_send_protocol_message(
     args->user_data = user_data;
     args->message_type = message_args->message_type;
     args->connection = connection;
+    args->flush_fn = flush_fn;
 
     if (continuation) {
         args->continuation = continuation;
@@ -517,10 +520,6 @@ static int s_send_protocol_message(
         goto args_allocated_before_failure;
     }
 
-    args->allocator = connection->allocator;
-    args->user_data = user_data;
-    args->connection = connection;
-    args->flush_fn = flush_fn;
     aws_event_stream_rpc_server_connection_acquire(connection);
 
     if (aws_event_stream_channel_handler_write_message(
@@ -632,6 +631,7 @@ static int s_fetch_message_metadata(
                 aws_event_stream_rpc_stream_id_name.ptr, aws_event_stream_rpc_stream_id_name.len);
             if (aws_byte_buf_eq_ignore_case(&name_buf, &stream_id_field)) {
                 *stream_id = aws_event_stream_header_value_as_int32(header);
+                required_fields_found += 1;
                 goto found;
             }
 
@@ -639,6 +639,7 @@ static int s_fetch_message_metadata(
                 aws_event_stream_rpc_message_type_name.ptr, aws_event_stream_rpc_message_type_name.len);
             if (aws_byte_buf_eq_ignore_case(&name_buf, &message_type_field)) {
                 *message_type = aws_event_stream_header_value_as_int32(header);
+                required_fields_found += 1;
                 goto found;
             }
 
@@ -646,6 +647,7 @@ static int s_fetch_message_metadata(
                 aws_event_stream_rpc_message_flags_name.ptr, aws_event_stream_rpc_message_flags_name.len);
             if (aws_byte_buf_eq_ignore_case(&name_buf, &message_flags_field)) {
                 *message_flags = aws_event_stream_header_value_as_int32(header);
+                required_fields_found += 1;
                 goto found;
             }
         }
@@ -656,16 +658,14 @@ static int s_fetch_message_metadata(
 
             if (aws_byte_buf_eq_ignore_case(&name_buf, &operation_field)) {
                 *operation_name = aws_event_stream_header_value_as_string(header);
-                goto optional_found;
+                optional_fields_found += 1;
+                goto found;
             }
         }
 
+        continue;
+
     found:
-        required_fields_found += 1;
-
-    optional_found:
-        optional_fields_found += 1;
-
         if (required_fields_found == 3 && optional_fields_found == 1) {
             return AWS_OP_SUCCESS;
         }
@@ -796,7 +796,6 @@ static void s_route_message_by_type(
             continuation =
                 aws_mem_calloc(connection->allocator, 1, sizeof(struct aws_event_stream_rpc_server_continuation_token));
             if (!continuation) {
-                aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
                 return;
