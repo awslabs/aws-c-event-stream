@@ -493,20 +493,20 @@ static int s_send_protocol_message(
     /* since we preallocated the space for the headers, these can't fail, but we'll go ahead an assert on them just in
      * case */
     for (size_t i = 0; i < message_args->headers_count; ++i) {
-        AWS_ASSERT(!aws_array_list_push_back(&headers_list, &message_args->headers[i]));
+        AWS_FATAL_ASSERT(!aws_array_list_push_back(&headers_list, &message_args->headers[i]));
     }
 
-    AWS_ASSERT(!aws_event_stream_add_int32_header(
+    AWS_FATAL_ASSERT(!aws_event_stream_add_int32_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_message_type_name.ptr,
         aws_event_stream_rpc_message_type_name.len,
         message_args->message_type));
-    AWS_ASSERT(!aws_event_stream_add_int32_header(
+    AWS_FATAL_ASSERT(!aws_event_stream_add_int32_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_message_flags_name.ptr,
         aws_event_stream_rpc_message_flags_name.len,
         message_args->message_flags));
-    AWS_ASSERT(!aws_event_stream_add_int32_header(
+    AWS_FATAL_ASSERT(!aws_event_stream_add_int32_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_stream_id_name.ptr,
         aws_event_stream_rpc_stream_id_name.len,
