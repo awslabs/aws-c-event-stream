@@ -294,7 +294,7 @@ static int s_do_connect(
     struct aws_byte_buf connect_ack_data;
     ASSERT_SUCCESS(aws_byte_buf_init(&connect_ack_data, allocator, 1024));
     testing_channel_drain_written_messages(&test_data->testing_channel, &connect_ack_data);
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, allocator, &connect_ack_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&message, allocator, &connect_ack_data));
     aws_byte_buf_clean_up(&connect_ack_data);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers_list));
@@ -315,6 +315,7 @@ static int s_do_connect(
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, message_type);
     aws_array_list_clean_up(&headers_list);
+    aws_event_stream_message_clean_up(&message);
 
     return AWS_OP_SUCCESS;
 }
@@ -472,7 +473,7 @@ static int s_test_event_stream_rpc_server_connection_messages_before_connect_rec
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     aws_array_list_clear(&headers_list);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
@@ -595,7 +596,7 @@ static int s_test_event_stream_rpc_server_connection_messages_before_connect_ack
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     aws_array_list_clear(&headers_list);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
@@ -680,7 +681,7 @@ static int s_test_event_stream_rpc_server_connection_unknown_message_type(struct
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     aws_array_list_clear(&headers_list);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
@@ -760,7 +761,7 @@ static int s_test_event_stream_rpc_server_connection_missing_message_type(struct
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     aws_array_list_clear(&headers_list);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
@@ -840,7 +841,7 @@ static int s_test_event_stream_rpc_server_connection_missing_message_flags(struc
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     aws_array_list_clear(&headers_list);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
@@ -916,7 +917,7 @@ static int s_test_event_stream_rpc_server_connection_missing_stream_id(struct aw
     struct aws_byte_buf connect_ack_data;
     ASSERT_SUCCESS(aws_byte_buf_init(&connect_ack_data, allocator, 1024));
     testing_channel_drain_written_messages(&test_data->testing_channel, &connect_ack_data);
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, allocator, &connect_ack_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&message, allocator, &connect_ack_data));
     aws_byte_buf_clean_up(&connect_ack_data);
     aws_array_list_clear(&headers_list);
 
@@ -1087,7 +1088,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_messages_flow(
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
 
     bool message_type_found = false;
@@ -1236,7 +1237,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_missing_operat
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
 
     bool message_type_found = false;
@@ -1335,7 +1336,7 @@ static int s_test_event_stream_rpc_server_connection_stream_id_ahead(struct aws_
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
 
     bool message_type_found = false;
@@ -1479,7 +1480,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_reused_stream_
     testing_channel_drain_written_messages(&test_data->testing_channel, &final_message);
 
     struct aws_event_stream_message written_message;
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &final_message));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &final_message));
     aws_byte_buf_clean_up(&final_message);
 
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
@@ -1563,7 +1564,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_reused_stream_
     struct aws_linked_list_node *written_message_node = aws_linked_list_front(message_queue);
     struct aws_io_message *io_message = AWS_CONTAINER_OF(written_message_node, struct aws_io_message, queueing_handle);
 
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&written_message, allocator, &io_message->message_data));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&written_message, allocator, &io_message->message_data));
     ASSERT_SUCCESS(aws_event_stream_message_headers(&written_message, &headers_list));
 
     message_type_found = false;
@@ -1663,7 +1664,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_max_stream_id_
     struct aws_byte_buf final_message;
     ASSERT_SUCCESS(aws_byte_buf_init(&final_message, allocator, 1024));
     testing_channel_drain_written_messages(&test_data->testing_channel, &final_message);
-    ASSERT_SUCCESS(aws_event_stream_message_from_buffer(&message, allocator, &final_message));
+    ASSERT_SUCCESS(aws_event_stream_message_from_buffer_copy(&message, allocator, &final_message));
     aws_byte_buf_clean_up(&final_message);
     ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers_list));
 
