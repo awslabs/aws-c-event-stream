@@ -567,13 +567,15 @@ void aws_event_stream_rpc_server_override_last_stream_id(
 void aws_event_stream_rpc_server_connection_close(
     struct aws_event_stream_rpc_connection *connection,
     int shutdown_error_code) {
-    aws_atomic_store_int(&connection->is_closed, 1U);
-    aws_channel_shutdown(connection->channel, shutdown_error_code);
 
-    if (!connection->bootstrap_owned) {
+    if (!aws_event_stream_rpc_server_connection_is_closed(connection)) {
         aws_atomic_store_int(&connection->is_closed, 1U);
-        aws_hash_table_clear(&connection->continuation_table);
-        aws_event_stream_rpc_server_connection_release(connection);
+        aws_channel_shutdown(connection->channel, shutdown_error_code);
+
+        if (!connection->bootstrap_owned) {
+            aws_hash_table_clear(&connection->continuation_table);
+            aws_event_stream_rpc_server_connection_release(connection);
+        }
     }
 }
 
