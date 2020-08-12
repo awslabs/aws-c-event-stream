@@ -23,10 +23,10 @@
 #include <aws/io/channel_bootstrap.h>
 
 #if defined(_MSC_VER)
-     /* allow non-constant aggregate initializer */
-#    pragma warning(disable: 4204)
-     /* allow passing a pointer to an automatically allocated variable around, cause I'm smarter than the compiler. */
-#    pragma warning(disable: 4221)
+/* allow non-constant aggregate initializer */
+#    pragma warning(disable : 4204)
+/* allow passing a pointer to an automatically allocated variable around, cause I'm smarter than the compiler. */
+#    pragma warning(disable : 4221)
 #endif
 
 static const struct aws_byte_cursor s_json_content_type_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(":content-type");
