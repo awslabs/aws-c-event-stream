@@ -22,6 +22,13 @@
 #include <aws/io/channel.h>
 #include <aws/io/channel_bootstrap.h>
 
+#if defined(_MSC_VER)
+     /* allow non-constant aggregate initializer */
+#    pragma warning(disable: 4204)
+     /* allow passing a pointer to an automatically allocated variable around, cause I'm smarter than the compiler. */
+#    pragma warning(disable: 4221)
+#endif
+
 static const struct aws_byte_cursor s_json_content_type_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(":content-type");
 static const struct aws_byte_cursor s_json_content_type_value =
     AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("application/json");
@@ -499,17 +506,17 @@ static int s_send_protocol_message(
     AWS_FATAL_ASSERT(!aws_event_stream_add_int32_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_message_type_name.ptr,
-        aws_event_stream_rpc_message_type_name.len,
+        (uint8_t)aws_event_stream_rpc_message_type_name.len,
         message_args->message_type));
     AWS_FATAL_ASSERT(!aws_event_stream_add_int32_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_message_flags_name.ptr,
-        aws_event_stream_rpc_message_flags_name.len,
+        (uint8_t)aws_event_stream_rpc_message_flags_name.len,
         message_args->message_flags));
     AWS_FATAL_ASSERT(!aws_event_stream_add_int32_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_stream_id_name.ptr,
-        aws_event_stream_rpc_stream_id_name.len,
+        (uint8_t)aws_event_stream_rpc_stream_id_name.len,
         stream_id));
 
     int message_init_err_code =

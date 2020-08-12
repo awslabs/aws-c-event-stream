@@ -624,12 +624,13 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_string_header(
     struct aws_byte_cursor name,
     struct aws_byte_cursor value) {
     AWS_PRECONDITION(name.len < INT8_MAX);
+    AWS_PRECONDITION(value.len < INT16_MAX);
 
     struct aws_event_stream_header_value_pair header = {
         .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
         .header_value.variable_len_val = value.ptr,
-        .header_value_len = value.len,
-        .header_name_len = name.len,
+        .header_value_len = (uint16_t)value.len,
+        .header_name_len = (uint8_t)name.len,
         .value_owned = 0,
     };
 
@@ -645,8 +646,8 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
 
     struct aws_event_stream_header_value_pair header = {
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
-        .header_value_len = sizeof(int32_t),
-        .header_name_len = name.len,
+        .header_value_len = (uint16_t)sizeof(int32_t),
+        .header_name_len = (uint8_t)name.len,
         .value_owned = 0,
     };
 
