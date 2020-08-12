@@ -42,6 +42,18 @@ static struct aws_error_info s_errors[] = {
         AWS_ERROR_EVENT_STREAM_MESSAGE_PARSER_ILLEGAL_STATE,
         "message parser encountered an illegal state",
         LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_CONNECTION_CLOSED,
+        "event stream rpc connection has been closed",
+        LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR,
+        "event stream rpc connection has encountered a protocol error",
+        LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED,
+        "event stream rpc connection stream is closed.",
+        LIB_NAME),
 };
 
 static struct aws_error_info_list s_list = {
