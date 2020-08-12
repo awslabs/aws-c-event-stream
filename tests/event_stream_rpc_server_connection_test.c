@@ -968,6 +968,8 @@ static void s_on_continuation_message(
     struct aws_event_stream_rpc_server_continuation_token *token,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data) {
+    (void)token;
+
     struct received_protocol_message_data *message_data = user_data;
     message_data->message_type = message_args->message_type;
     message_data->message_flags = message_args->message_flags;
@@ -975,6 +977,8 @@ static void s_on_continuation_message(
 }
 
 static void s_on_continuation_closed(struct aws_event_stream_rpc_server_continuation_token *token, void *user_data) {
+    (void)token;
+
     struct received_protocol_message_data *message_data = user_data;
     message_data->continuation_closed = true;
 }
@@ -1640,7 +1644,7 @@ static int s_test_event_stream_rpc_server_connection_continuation_max_stream_id_
     ASSERT_SUCCESS(aws_event_stream_add_string_header(
         &headers_list,
         (const char *)aws_event_stream_rpc_operation_name.ptr,
-        aws_event_stream_rpc_operation_name.len,
+        (uint8_t)aws_event_stream_rpc_operation_name.len,
         (const char *)operation_name.ptr,
         (uint16_t)operation_name.len,
         0));
