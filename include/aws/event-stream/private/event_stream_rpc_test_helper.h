@@ -15,7 +15,7 @@ AWS_EXTERN_C_BEGIN
 
 /** This is for testing edge cases around stream id exhaustion. Don't ever include this file outside of a unit test. */
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_override_last_stream_id(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int32_t value);
 
 AWS_EXTERN_C_END

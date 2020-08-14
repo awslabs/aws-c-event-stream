@@ -19,7 +19,7 @@ struct test_data {
     struct aws_event_loop_group el_group;
     struct aws_server_bootstrap *bootstrap;
     struct aws_event_stream_rpc_server_listener *listener;
-    struct aws_event_stream_rpc_connection *connection;
+    struct aws_event_stream_rpc_server_connection *connection;
     aws_event_stream_rpc_server_connection_protocol_message_fn *received_fn;
     aws_event_stream_rpc_server_on_incoming_stream_fn *on_new_stream;
     aws_event_stream_rpc_server_stream_continuation_fn *on_continuation;
@@ -34,7 +34,7 @@ struct test_data {
 static struct test_data s_test_data;
 
 static void s_fixture_on_protocol_message(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data) {
     struct test_data *test_data = user_data;
@@ -57,6 +57,7 @@ static void s_stream_continuation_closed_shim(
 }
 
 static void s_on_incoming_stream_shim(
+    struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
     struct aws_event_stream_rpc_server_stream_continuation_options *continuation_options,
@@ -68,12 +69,13 @@ static void s_on_incoming_stream_shim(
     continuation_options->user_data = test_data;
 
     if (test_data->on_new_stream) {
-        test_data->on_new_stream(token, operation_name, continuation_options, test_data->continuation_user_data);
+        test_data->on_new_stream(
+            connection, token, operation_name, continuation_options, test_data->continuation_user_data);
     }
 }
 
 static int s_fixture_on_new_connection(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int error_code,
     struct aws_event_stream_rpc_connection_options *connection_options,
     void *user_data) {
@@ -86,7 +88,7 @@ static int s_fixture_on_new_connection(
 }
 
 static void s_fixture_on_connection_shutdown(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int error_code,
     void *user_data) {
     (void)connection;
@@ -214,7 +216,7 @@ struct received_protocol_message_data {
 };
 
 static void s_on_recieved_protocol_message(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data) {
     (void)connection;
@@ -392,7 +394,6 @@ static int s_test_event_stream_rpc_server_connection_connect_reject_flow(struct 
     aws_byte_buf_clean_up(&message_data.payload_cpy);
 
     struct aws_event_stream_rpc_message_args connect_ack_args = {
-        .message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_REJECTED,
         .message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK,
         .payload = &payload,
     };
@@ -952,10 +953,12 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_data)
 
 static void s_on_incoming_stream(
+    struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
     struct aws_event_stream_rpc_server_stream_continuation_options *continuation_options,
     void *user_data) {
+    (void)connection;
     (void)continuation_options;
 
     struct received_protocol_message_data *message_data = user_data;

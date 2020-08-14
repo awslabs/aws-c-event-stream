@@ -93,7 +93,7 @@ struct aws_event_stream_rpc_server_listener {
     void *user_data;
 };
 
-struct aws_event_stream_rpc_connection {
+struct aws_event_stream_rpc_server_connection {
     struct aws_allocator *allocator;
     struct aws_hash_table continuation_table;
     struct aws_event_stream_rpc_server_listener *server;
@@ -111,7 +111,7 @@ struct aws_event_stream_rpc_connection {
 
 struct aws_event_stream_rpc_server_continuation_token {
     uint32_t stream_id;
-    struct aws_event_stream_rpc_connection *connection;
+    struct aws_event_stream_rpc_server_connection *connection;
     aws_event_stream_rpc_server_stream_continuation_fn *continuation_fn;
     aws_event_stream_rpc_server_stream_continuation_closed_fn *closed_fn;
     void *user_data;
@@ -132,11 +132,11 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
 
 /* We have two paths for creating a connection on a channel. The first is an incoming connection on the server listener.
  * The second is adding a connection to an already existing channel. This is the code common to both cases. */
-static struct aws_event_stream_rpc_connection *s_create_connection_on_channel(
+static struct aws_event_stream_rpc_server_connection *s_create_connection_on_channel(
     struct aws_event_stream_rpc_server_listener *server,
     struct aws_channel *channel) {
-    struct aws_event_stream_rpc_connection *connection =
-        aws_mem_calloc(server->allocator, 1, sizeof(struct aws_event_stream_rpc_connection));
+    struct aws_event_stream_rpc_server_connection *connection =
+        aws_mem_calloc(server->allocator, 1, sizeof(struct aws_event_stream_rpc_server_connection));
     struct aws_channel_handler *event_stream_handler = NULL;
     struct aws_channel_slot *slot = NULL;
 
@@ -206,7 +206,7 @@ error:
     return NULL;
 }
 
-struct aws_event_stream_rpc_connection *aws_event_stream_rpc_server_connection_from_existing_channel(
+struct aws_event_stream_rpc_server_connection *aws_event_stream_rpc_server_connection_from_existing_channel(
     struct aws_event_stream_rpc_server_listener *server,
     struct aws_channel *channel,
     const struct aws_event_stream_rpc_connection_options *connection_options) {
@@ -214,7 +214,7 @@ struct aws_event_stream_rpc_connection *aws_event_stream_rpc_server_connection_f
         connection_options->on_connection_protocol_message && "on_connection_protocol_message must be specified!");
     AWS_FATAL_ASSERT(connection_options->on_incoming_stream && "on_connection_protocol_message must be specified");
 
-    struct aws_event_stream_rpc_connection *connection = s_create_connection_on_channel(server, channel);
+    struct aws_event_stream_rpc_server_connection *connection = s_create_connection_on_channel(server, channel);
 
     if (!connection) {
         return NULL;
@@ -228,11 +228,11 @@ struct aws_event_stream_rpc_connection *aws_event_stream_rpc_server_connection_f
     return connection;
 }
 
-void aws_event_stream_rpc_server_connection_acquire(struct aws_event_stream_rpc_connection *connection) {
+void aws_event_stream_rpc_server_connection_acquire(struct aws_event_stream_rpc_server_connection *connection) {
     aws_atomic_fetch_add_explicit(&connection->ref_count, 1, aws_memory_order_relaxed);
 }
 
-void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_connection *connection) {
+void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_server_connection *connection) {
     size_t value = aws_atomic_fetch_sub_explicit(&connection->ref_count, 1, aws_memory_order_seq_cst);
 
     if (value == 1) {
@@ -256,7 +256,7 @@ static void s_on_accept_channel_setup(
     if (!error_code) {
         AWS_FATAL_ASSERT(channel && "Channel should never be null with a 0 error code.");
 
-        struct aws_event_stream_rpc_connection *connection = s_create_connection_on_channel(server, channel);
+        struct aws_event_stream_rpc_server_connection *connection = s_create_connection_on_channel(server, channel);
 
         if (!connection) {
             int error = aws_last_error();
@@ -284,7 +284,8 @@ static void s_on_accept_channel_setup(
 }
 
 /* this is just to get the connection object off of the channel. */
-static inline struct aws_event_stream_rpc_connection *s_rpc_connection_from_channel(struct aws_channel *channel) {
+static inline struct aws_event_stream_rpc_server_connection *s_rpc_connection_from_channel(
+    struct aws_channel *channel) {
     struct aws_channel_slot *our_slot = NULL;
     struct aws_channel_slot *current_slot = aws_channel_get_first_slot(channel);
     AWS_FATAL_ASSERT(
@@ -307,7 +308,7 @@ static void s_on_accept_channel_shutdown(
 
     struct aws_event_stream_rpc_server_listener *server = user_data;
 
-    struct aws_event_stream_rpc_connection *connection = s_rpc_connection_from_channel(channel);
+    struct aws_event_stream_rpc_server_connection *connection = s_rpc_connection_from_channel(channel);
     aws_atomic_store_int(&connection->is_closed, 1U);
     aws_hash_table_clear(&connection->continuation_table);
     aws_event_stream_rpc_server_connection_acquire(connection);
@@ -344,7 +345,7 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         .bootstrap = options->bootstrap,
         .socket_options = options->socket_options,
         .tls_options = options->tls_options,
-        .enable_read_back_pressure = options->enable_read_backpressure,
+        .enable_read_back_pressure = false,
         .host_name = options->host_name,
         .port = options->port,
         .incoming_callback = s_on_accept_channel_setup,
@@ -399,7 +400,7 @@ struct event_stream_connection_send_message_args {
     struct aws_allocator *allocator;
     struct aws_event_stream_message message;
     enum aws_event_stream_rpc_message_type message_type;
-    struct aws_event_stream_rpc_connection *connection;
+    struct aws_event_stream_rpc_server_connection *connection;
     struct aws_event_stream_rpc_server_continuation_token *continuation;
     aws_event_stream_rpc_server_message_flush_fn *flush_fn;
     void *user_data;
@@ -443,7 +444,7 @@ static void s_on_protocol_message_written_fn(
 }
 
 static int s_send_protocol_message(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *continuation,
     const struct aws_event_stream_rpc_message_args *message_args,
     int32_t stream_id,
@@ -482,7 +483,7 @@ static int s_send_protocol_message(
     }
 
     if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK &&
-        message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_REJECTED) {
+        !(message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED)) {
         args->terminate_connection = true;
     }
 
@@ -547,7 +548,7 @@ args_allocated_before_failure:
 }
 
 int aws_event_stream_rpc_server_connection_send_protocol_message(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     const struct aws_event_stream_rpc_message_args *message_args,
     aws_event_stream_rpc_server_message_flush_fn *flush_fn,
     void *user_data) {
@@ -559,13 +560,13 @@ int aws_event_stream_rpc_server_connection_send_protocol_message(
 }
 
 void aws_event_stream_rpc_server_override_last_stream_id(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int32_t value) {
     connection->latest_stream_id = value;
 }
 
 void aws_event_stream_rpc_server_connection_close(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int shutdown_error_code) {
 
     if (!aws_event_stream_rpc_server_connection_is_closed(connection)) {
@@ -584,7 +585,7 @@ bool aws_event_stream_rpc_server_continuation_is_closed(
     return aws_atomic_load_int(&continuation->is_closed) == 1U;
 }
 
-bool aws_event_stream_rpc_server_connection_is_closed(struct aws_event_stream_rpc_connection *connection) {
+bool aws_event_stream_rpc_server_connection_is_closed(struct aws_event_stream_rpc_server_connection *connection) {
     return aws_atomic_load_int(&connection->is_closed) == 1U;
 }
 
@@ -609,6 +610,9 @@ int aws_event_stream_rpc_server_continuation_send_message(
     const struct aws_event_stream_rpc_message_args *message_args,
     aws_event_stream_rpc_server_message_flush_fn *flush_fn,
     void *user_data) {
+    AWS_FATAL_PRECONDITION(continuation->continuation_fn);
+    AWS_FATAL_PRECONDITION(continuation->closed_fn);
+
     if (aws_event_stream_rpc_server_continuation_is_closed(continuation)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED);
     }
@@ -686,12 +690,12 @@ static int s_fetch_message_metadata(
 static void s_connection_error_message_flush_fn(int error_code, void *user_data) {
     (void)error_code;
 
-    struct aws_event_stream_rpc_connection *connection = user_data;
+    struct aws_event_stream_rpc_server_connection *connection = user_data;
     aws_event_stream_rpc_server_connection_close(connection, AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
 }
 
 static void s_send_connection_level_error(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     uint32_t message_type,
     uint32_t message_flags,
     const struct aws_byte_cursor *message) {
@@ -719,7 +723,7 @@ static void s_send_connection_level_error(
 /* TODO: come back and make this a proper state pattern. For now it's branches all over the place until we nail
  * down the spec. */
 static void s_route_message_by_type(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_message *message,
     struct aws_array_list *headers_list,
     uint32_t stream_id,
@@ -827,7 +831,8 @@ static void s_route_message_by_type(
             AWS_ZERO_STRUCT(options);
 
             aws_event_stream_rpc_server_continuation_acquire(continuation);
-            connection->on_incoming_stream(continuation, operation_name, &options, connection->user_data);
+            connection->on_incoming_stream(
+                continuation->connection, continuation, operation_name, &options, connection->user_data);
             AWS_FATAL_ASSERT(options.on_continuation);
             AWS_FATAL_ASSERT(options.on_continuation_closed);
 
@@ -871,7 +876,7 @@ static void s_route_message_by_type(
 static void s_on_message_received(struct aws_event_stream_message *message, int error_code, void *user_data) {
 
     if (!error_code) {
-        struct aws_event_stream_rpc_connection *connection = user_data;
+        struct aws_event_stream_rpc_server_connection *connection = user_data;
 
         struct aws_array_list headers;
         if (aws_array_list_init_dynamic(

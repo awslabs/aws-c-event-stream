@@ -8,7 +8,7 @@
 #include <aws/event-stream/event_stream_rpc.h>
 
 struct aws_channel;
-struct aws_event_stream_rpc_connection;
+struct aws_event_stream_rpc_server_connection;
 
 struct aws_event_stream_rpc_server_continuation_token;
 
@@ -39,7 +39,7 @@ struct aws_event_stream_rpc_server_stream_continuation_options {
  * Invoked when a non-stream level message is received on a connection.
  */
 typedef void(aws_event_stream_rpc_server_connection_protocol_message_fn)(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data);
 
@@ -48,6 +48,7 @@ typedef void(aws_event_stream_rpc_server_connection_protocol_message_fn)(
  * continuation options or the program will assert and exit.
  */
 typedef void(aws_event_stream_rpc_server_on_incoming_stream_fn)(
+    struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
     struct aws_event_stream_rpc_server_stream_continuation_options *continuation_options,
@@ -69,7 +70,7 @@ struct aws_event_stream_rpc_connection_options {
  * aws_event_stream_server_connection_release().
  */
 typedef int(aws_event_stream_rpc_server_on_new_connection_fn)(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int error_code,
     struct aws_event_stream_rpc_connection_options *connection_options,
     void *user_data);
@@ -78,7 +79,7 @@ typedef int(aws_event_stream_rpc_server_on_new_connection_fn)(
  * Invoked when a successfully created connection is shutdown. error_code will indicate the reason for the shutdown.
  */
 typedef void(aws_event_stream_rpc_server_on_connection_shutdown_fn)(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int error_code,
     void *user_data);
 
@@ -110,9 +111,6 @@ struct aws_event_stream_rpc_server_listener_options {
     aws_event_stream_rpc_server_on_connection_shutdown_fn *on_connection_shutdown;
     aws_event_stream_rpc_server_on_listener_destroy_fn *on_destroy_callback;
     void *user_data;
-    /** if set to true, backpressure will become manual and you'll be responsible for releasing back pressure after
-     * consuming messages. Currently the API for using this feature is not exposed. */
-    bool enable_read_backpressure;
 };
 
 AWS_EXTERN_C_BEGIN
@@ -136,21 +134,21 @@ AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_listener_release(
  * connection is already ref counted and you must call aws_event_stream_rpc_server_connection_release() even if you did
  * not explictly call aws_event_stream_rpc_server_connection_acquire()
  */
-AWS_EVENT_STREAM_API struct aws_event_stream_rpc_connection *
+AWS_EVENT_STREAM_API struct aws_event_stream_rpc_server_connection *
     aws_event_stream_rpc_server_connection_from_existing_channel(
         struct aws_event_stream_rpc_server_listener *server,
         struct aws_channel *channel,
         const struct aws_event_stream_rpc_connection_options *connection_options);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_connection_acquire(
-    struct aws_event_stream_rpc_connection *connection);
+    struct aws_event_stream_rpc_server_connection *connection);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_connection_release(
-    struct aws_event_stream_rpc_connection *connection);
+    struct aws_event_stream_rpc_server_connection *connection);
 
 /**
  * returns true if the connection has been closed.
  */
 AWS_EVENT_STREAM_API bool aws_event_stream_rpc_server_connection_is_closed(
-    struct aws_event_stream_rpc_connection *connection);
+    struct aws_event_stream_rpc_server_connection *connection);
 
 /**
  * Closes the connection (including all continuations on the connection), and releases the connection ref count.
@@ -158,7 +156,7 @@ AWS_EVENT_STREAM_API bool aws_event_stream_rpc_server_connection_is_closed(
  * cases.
  */
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_connection_close(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     int shutdown_error_code);
 
 /**
@@ -166,7 +164,7 @@ AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_connection_close(
  * to the channel, flush_fn will be invoked.
  */
 AWS_EVENT_STREAM_API int aws_event_stream_rpc_server_connection_send_protocol_message(
-    struct aws_event_stream_rpc_connection *connection,
+    struct aws_event_stream_rpc_server_connection *connection,
     const struct aws_event_stream_rpc_message_args *message_args,
     aws_event_stream_rpc_server_message_flush_fn *flush_fn,
     void *user_data);

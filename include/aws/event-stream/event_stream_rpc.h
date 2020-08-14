@@ -6,9 +6,21 @@
  */
 #include <aws/event-stream/event_stream.h>
 
+/**
+ * :message-type header name
+ */
 extern AWS_EVENT_STREAM_API const struct aws_byte_cursor aws_event_stream_rpc_message_type_name;
+/**
+ * :message-flags header name
+ */
 extern AWS_EVENT_STREAM_API const struct aws_byte_cursor aws_event_stream_rpc_message_flags_name;
+/**
+ * :stream-id header name
+ */
 extern AWS_EVENT_STREAM_API const struct aws_byte_cursor aws_event_stream_rpc_stream_id_name;
+/**
+ * operation header name.
+ */
 extern AWS_EVENT_STREAM_API const struct aws_byte_cursor aws_event_stream_rpc_operation_name;
 
 enum aws_event_stream_rpc_message_type {
@@ -26,8 +38,7 @@ enum aws_event_stream_rpc_message_type {
 
 enum aws_event_stream_rpc_message_flag {
     AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED = 1,
-    AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_REJECTED = 2,
-    AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM = 4,
+    AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM = 2,
 };
 
 struct aws_event_stream_rpc_message_args {
