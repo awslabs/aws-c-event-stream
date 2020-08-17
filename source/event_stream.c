@@ -85,7 +85,7 @@ void aws_event_stream_library_clean_up(void) {
 
 /* Computes the byte length necessary to store the headers represented in the headers list.
  * returns that length. */
-uint32_t compute_headers_len(struct aws_array_list *headers) {
+uint32_t aws_event_stream_compute_headers_required_buffer_len(const struct aws_array_list *headers) {
     if (!headers || !aws_array_list_length(headers)) {
         return 0;
     }
@@ -117,7 +117,7 @@ uint32_t compute_headers_len(struct aws_array_list *headers) {
 /* adds the headers represented in the headers list to the buffer.
  returns the new buffer offset for use elsewhere. Assumes buffer length is at least the length of the return value
  from compute_headers_length() */
-size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
+size_t aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer) {
     if (!headers || !aws_array_list_length(headers)) {
         return 0;
     }
@@ -261,7 +261,7 @@ int aws_event_stream_message_init(
 
     size_t payload_len = payload ? payload->len : 0;
 
-    uint32_t headers_length = compute_headers_len(headers);
+    uint32_t headers_length = aws_event_stream_compute_headers_required_buffer_len(headers);
 
     if (AWS_UNLIKELY(headers_length > AWS_EVENT_STREAM_MAX_HEADERS_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
@@ -296,7 +296,7 @@ int aws_event_stream_message_init(
         buffer_offset += sizeof(running_crc);
 
         if (headers_length) {
-            buffer_offset += add_headers_to_buffer(headers, buffer_offset);
+            buffer_offset += aws_event_stream_write_headers_to_buffer(headers, buffer_offset);
         }
 
         if (payload) {

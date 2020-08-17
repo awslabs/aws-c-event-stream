@@ -227,6 +227,11 @@ AWS_EVENT_STREAM_API uint32_t aws_event_stream_message_message_crc(const struct 
  */
 AWS_EVENT_STREAM_API const uint8_t *aws_event_stream_message_buffer(const struct aws_event_stream_message *message);
 
+AWS_EVENT_STREAM_API uint32_t
+    aws_event_stream_compute_headers_required_buffer_len(const struct aws_array_list *headers);
+
+AWS_EVENT_STREAM_API size_t
+    aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer);
 /**
  * Initialize a streaming decoder for messages with callbacks for usage and an optional user context pointer.
  */
