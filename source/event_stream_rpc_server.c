@@ -559,6 +559,10 @@ int aws_event_stream_rpc_server_connection_send_protocol_message(
     return s_send_protocol_message(connection, NULL, message_args, 0, flush_fn, user_data);
 }
 
+void *aws_event_stream_rpc_server_connection_get_user_data(struct aws_event_stream_rpc_server_connection *connection) {
+    return connection->user_data;
+}
+
 void aws_event_stream_rpc_server_override_last_stream_id(
     struct aws_event_stream_rpc_server_connection *connection,
     int32_t value) {

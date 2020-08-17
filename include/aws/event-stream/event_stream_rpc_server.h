@@ -144,6 +144,8 @@ AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_connection_acquire(
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_connection_release(
     struct aws_event_stream_rpc_server_connection *connection);
 
+AWS_EVENT_STREAM_API void *aws_event_stream_rpc_server_connection_get_user_data(
+    struct aws_event_stream_rpc_server_connection *connection);
 /**
  * returns true if the connection has been closed.
  */
