@@ -232,6 +232,16 @@ AWS_EVENT_STREAM_API uint32_t
 
 AWS_EVENT_STREAM_API size_t
     aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer);
+
+/** Get the headers from the buffer, store them in the headers list.
+ * the user's responsibility to cleanup the list when they are finished with it.
+ * no buffer copies happen here, the lifetime of the buffer, must outlive the usage of the headers.
+ * returns error codes defined in the public interface.
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_read_headers_from_buffer(
+    struct aws_array_list *headers,
+    const uint8_t *buffer,
+    size_t headers_len);
 /**
  * Initialize a streaming decoder for messages with callbacks for usage and an optional user context pointer.
  */

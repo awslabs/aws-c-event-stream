@@ -174,11 +174,10 @@ size_t aws_event_stream_write_headers_to_buffer(const struct aws_array_list *hea
     return buffer_alias - buffer;
 }
 
-/* Get the headers from the buffer, store them in the headers list.
- * the user's reponsibility to cleanup the list when they are finished with it.
- * no buffer copies happen here, the lifetime of the buffer, must outlive the usage of the headers.
- * returns error codes defined in the public interface. */
-int get_headers_from_buffer(struct aws_array_list *headers, const uint8_t *buffer, size_t headers_len) {
+int aws_event_stream_read_headers_from_buffer(
+    struct aws_array_list *headers,
+    const uint8_t *buffer,
+    size_t headers_len) {
 
     if (AWS_UNLIKELY(headers_len > AWS_EVENT_STREAM_MAX_HEADERS_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
@@ -410,7 +409,7 @@ uint32_t aws_event_stream_message_prelude_crc(const struct aws_event_stream_mess
 }
 
 int aws_event_stream_message_headers(const struct aws_event_stream_message *message, struct aws_array_list *headers) {
-    return get_headers_from_buffer(
+    return aws_event_stream_read_headers_from_buffer(
         headers,
         message->message_buffer + AWS_EVENT_STREAM_PRELUDE_LENGTH,
         aws_event_stream_message_headers_len(message));
