@@ -107,10 +107,12 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
 
 include(CTest)
 enable_testing()
-add_subdirectory(tests)
+if (BUILD_TESTING)
+    add_subdirectory(tests)
 
-if(NOT MSVC)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    if(NOT MSVC)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    endif()
+
+    add_subdirectory(bin)
 endif()
-
-add_subdirectory(bin)
