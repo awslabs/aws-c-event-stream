@@ -16,7 +16,7 @@
 struct test_data {
     struct aws_allocator *allocator;
     struct testing_channel testing_channel;
-    struct aws_event_loop_group el_group;
+    struct aws_event_loop_group *el_group;
     struct aws_server_bootstrap *bootstrap;
     struct aws_event_stream_rpc_server_listener *listener;
     struct aws_event_stream_rpc_server_connection *connection;
@@ -107,13 +107,26 @@ static void s_on_listener_destroy(struct aws_event_stream_rpc_server_listener *s
     aws_condition_variable_notify_one(&test_data->shutdown_cvar);
 }
 
+static void s_event_loop_shutdown_callback(void *user_data) {
+    struct test_data *test_data = user_data;
+    aws_mutex_lock(&test_data->shutdown_lock);
+    test_data->shutdown_completed = true;
+    aws_mutex_unlock(&test_data->shutdown_lock);
+    aws_condition_variable_notify_one(&test_data->shutdown_cvar);
+}
+
 static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     aws_event_stream_library_init(allocator);
     struct test_data *test_data = ctx;
     AWS_ZERO_STRUCT(*test_data);
 
-    ASSERT_SUCCESS(aws_event_loop_group_default_init(&test_data->el_group, allocator, 0));
-    test_data->bootstrap = aws_server_bootstrap_new(allocator, &test_data->el_group);
+    struct aws_shutdown_callback_options el_shutdown_options = {
+        .shutdown_callback_fn = s_event_loop_shutdown_callback,
+        .shutdown_callback_user_data = test_data,
+    };
+    test_data->el_group = aws_event_loop_group_new_default(allocator, 0, &el_shutdown_options);
+    ASSERT_NOT_NULL(test_data->el_group);
+    test_data->bootstrap = aws_server_bootstrap_new(allocator, test_data->el_group);
     ASSERT_NOT_NULL(test_data->bootstrap);
 
     ASSERT_SUCCESS(aws_mutex_init(&test_data->shutdown_lock));
@@ -177,9 +190,14 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
         aws_mutex_lock(&test_data->shutdown_lock);
         aws_condition_variable_wait_pred(
             &test_data->shutdown_cvar, &test_data->shutdown_lock, s_shutdown_predicate_fn, test_data);
+        test_data->shutdown_completed = false;
         aws_mutex_unlock(&test_data->shutdown_lock);
         aws_server_bootstrap_release(test_data->bootstrap);
-        aws_event_loop_group_clean_up(&test_data->el_group);
+        aws_event_loop_group_release(test_data->el_group);
+        aws_mutex_lock(&test_data->shutdown_lock);
+        aws_condition_variable_wait_pred(
+            &test_data->shutdown_cvar, &test_data->shutdown_lock, s_shutdown_predicate_fn, test_data);
+        aws_mutex_unlock(&test_data->shutdown_lock);
         aws_mutex_clean_up(&test_data->shutdown_lock);
         aws_condition_variable_clean_up(&test_data->shutdown_cvar);
     }
