@@ -44,10 +44,10 @@ typedef void(aws_event_stream_rpc_server_connection_protocol_message_fn)(
     void *user_data);
 
 /**
- * Invoked when a new stream has been received on the connection. You must fill in the fields for
- * continuation options or the program will assert and exit.
+ * Invoked when a new stream has been received on the connection. If you return AWS_OP_SUCCESS (0),
+ * You must fill in the fields for continuation options or the program will assert and exit.
  */
-typedef void(aws_event_stream_rpc_server_on_incoming_stream_fn)(
+typedef int(aws_event_stream_rpc_server_on_incoming_stream_fn)(
     struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
@@ -61,8 +61,8 @@ struct aws_event_stream_rpc_connection_options {
 };
 
 /**
- * Invoked when a new connection is received on a server listener. You must fill in the fields for connection_options
- * or the program will assert and exit.
+ * Invoked when a new connection is received on a server listener. If you return AWS_OP_SUCCESS,
+ * You must fill in the fields for connection_options or the program will assert and exit.
  *
  * If error_code is non-zero, an error occurred upon setting up the channel and connection will be NULL. Otherwise,
  * connection is non-null. If you intend to seat a pointer to connection, you MUST call

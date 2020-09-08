@@ -56,7 +56,7 @@ static void s_stream_continuation_closed_shim(
     test_data->on_continuation_closed(token, test_data->continuation_user_data);
 }
 
-static void s_on_incoming_stream_shim(
+static int s_on_incoming_stream_shim(
     struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
@@ -72,6 +72,8 @@ static void s_on_incoming_stream_shim(
         test_data->on_new_stream(
             connection, token, operation_name, continuation_options, test_data->continuation_user_data);
     }
+
+    return AWS_OP_SUCCESS;
 }
 
 static int s_fixture_on_new_connection(
@@ -952,7 +954,7 @@ AWS_TEST_CASE_FIXTURE(
     s_fixture_shutdown,
     &s_test_data)
 
-static void s_on_incoming_stream(
+static int s_on_incoming_stream(
     struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
@@ -966,6 +968,8 @@ static void s_on_incoming_stream(
     aws_event_stream_rpc_server_continuation_acquire(token);
     aws_byte_buf_init_copy_from_cursor(
         &message_data->last_seen_operation_name, message_data->allocator, operation_name);
+
+    return AWS_OP_SUCCESS;
 }
 
 static void s_on_continuation_message(

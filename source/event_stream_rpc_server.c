@@ -268,7 +268,12 @@ static void s_on_accept_channel_setup(
         AWS_ZERO_STRUCT(connection_options);
 
         aws_event_stream_rpc_server_connection_acquire(connection);
-        server->on_new_connection(connection, AWS_ERROR_SUCCESS, &connection_options, server->user_data);
+        if (server->on_new_connection(connection, AWS_ERROR_SUCCESS, &connection_options, server->user_data)) {
+            aws_channel_shutdown(channel, aws_last_error());
+            aws_event_stream_rpc_server_connection_release(connection);
+            return;
+        }
+
         AWS_FATAL_ASSERT(
             connection_options.on_connection_protocol_message && "on_connection_protocol_message must be specified!");
         AWS_FATAL_ASSERT(connection_options.on_incoming_stream && "on_connection_protocol_message must be specified");
@@ -835,8 +840,13 @@ static void s_route_message_by_type(
             AWS_ZERO_STRUCT(options);
 
             aws_event_stream_rpc_server_continuation_acquire(continuation);
-            connection->on_incoming_stream(
-                continuation->connection, continuation, operation_name, &options, connection->user_data);
+            if (connection->on_incoming_stream(
+                    continuation->connection, continuation, operation_name, &options, connection->user_data)) {
+                aws_event_stream_rpc_server_continuation_release(continuation);
+                s_send_connection_level_error(
+                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
+                return;
+            }
             AWS_FATAL_ASSERT(options.on_continuation);
             AWS_FATAL_ASSERT(options.on_continuation_closed);
 
