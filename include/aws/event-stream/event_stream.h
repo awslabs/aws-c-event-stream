@@ -27,6 +27,9 @@ enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN,
     AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE,
     AWS_ERROR_EVENT_STREAM_MESSAGE_PARSER_ILLEGAL_STATE,
+    AWS_ERROR_EVENT_STREAM_RPC_CONNECTION_CLOSED,
+    AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR,
+    AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED,
 };
 
 struct aws_event_stream_message_prelude {
@@ -224,6 +227,21 @@ AWS_EVENT_STREAM_API uint32_t aws_event_stream_message_message_crc(const struct 
  */
 AWS_EVENT_STREAM_API const uint8_t *aws_event_stream_message_buffer(const struct aws_event_stream_message *message);
 
+AWS_EVENT_STREAM_API uint32_t
+    aws_event_stream_compute_headers_required_buffer_len(const struct aws_array_list *headers);
+
+AWS_EVENT_STREAM_API size_t
+    aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer);
+
+/** Get the headers from the buffer, store them in the headers list.
+ * the user's responsibility to cleanup the list when they are finished with it.
+ * no buffer copies happen here, the lifetime of the buffer, must outlive the usage of the headers.
+ * returns error codes defined in the public interface.
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_read_headers_from_buffer(
+    struct aws_array_list *headers,
+    const uint8_t *buffer,
+    size_t headers_len);
 /**
  * Initialize a streaming decoder for messages with callbacks for usage and an optional user context pointer.
  */
@@ -266,6 +284,14 @@ AWS_EVENT_STREAM_API int aws_event_stream_add_string_header(
     const char *value,
     uint16_t value_len,
     int8_t copy);
+
+AWS_EVENT_STREAM_API struct aws_event_stream_header_value_pair aws_event_stream_create_string_header(
+    struct aws_byte_cursor name,
+    struct aws_byte_cursor value);
+
+AWS_EVENT_STREAM_API struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
+    struct aws_byte_cursor name,
+    int32_t value);
 
 /**
  * Adds a byte header to the list of headers.

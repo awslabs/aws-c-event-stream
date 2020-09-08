@@ -42,6 +42,18 @@ static struct aws_error_info s_errors[] = {
         AWS_ERROR_EVENT_STREAM_MESSAGE_PARSER_ILLEGAL_STATE,
         "message parser encountered an illegal state",
         LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_CONNECTION_CLOSED,
+        "event stream rpc connection has been closed",
+        LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR,
+        "event stream rpc connection has encountered a protocol error",
+        LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED,
+        "event stream rpc connection stream is closed.",
+        LIB_NAME),
 };
 
 static struct aws_error_info_list s_list = {
@@ -73,7 +85,7 @@ void aws_event_stream_library_clean_up(void) {
 
 /* Computes the byte length necessary to store the headers represented in the headers list.
  * returns that length. */
-uint32_t compute_headers_len(struct aws_array_list *headers) {
+uint32_t aws_event_stream_compute_headers_required_buffer_len(const struct aws_array_list *headers) {
     if (!headers || !aws_array_list_length(headers)) {
         return 0;
     }
@@ -105,7 +117,7 @@ uint32_t compute_headers_len(struct aws_array_list *headers) {
 /* adds the headers represented in the headers list to the buffer.
  returns the new buffer offset for use elsewhere. Assumes buffer length is at least the length of the return value
  from compute_headers_length() */
-size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
+size_t aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer) {
     if (!headers || !aws_array_list_length(headers)) {
         return 0;
     }
@@ -162,11 +174,10 @@ size_t add_headers_to_buffer(struct aws_array_list *headers, uint8_t *buffer) {
     return buffer_alias - buffer;
 }
 
-/* Get the headers from the buffer, store them in the headers list.
- * the user's reponsibility to cleanup the list when they are finished with it.
- * no buffer copies happen here, the lifetime of the buffer, must outlive the usage of the headers.
- * returns error codes defined in the public interface. */
-int get_headers_from_buffer(struct aws_array_list *headers, const uint8_t *buffer, size_t headers_len) {
+int aws_event_stream_read_headers_from_buffer(
+    struct aws_array_list *headers,
+    const uint8_t *buffer,
+    size_t headers_len) {
 
     if (AWS_UNLIKELY(headers_len > AWS_EVENT_STREAM_MAX_HEADERS_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
@@ -249,7 +260,7 @@ int aws_event_stream_message_init(
 
     size_t payload_len = payload ? payload->len : 0;
 
-    uint32_t headers_length = compute_headers_len(headers);
+    uint32_t headers_length = aws_event_stream_compute_headers_required_buffer_len(headers);
 
     if (AWS_UNLIKELY(headers_length > AWS_EVENT_STREAM_MAX_HEADERS_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
@@ -284,7 +295,7 @@ int aws_event_stream_message_init(
         buffer_offset += sizeof(running_crc);
 
         if (headers_length) {
-            buffer_offset += add_headers_to_buffer(headers, buffer_offset);
+            buffer_offset += aws_event_stream_write_headers_to_buffer(headers, buffer_offset);
         }
 
         if (payload) {
@@ -398,7 +409,7 @@ uint32_t aws_event_stream_message_prelude_crc(const struct aws_event_stream_mess
 }
 
 int aws_event_stream_message_headers(const struct aws_event_stream_message *message, struct aws_array_list *headers) {
-    return get_headers_from_buffer(
+    return aws_event_stream_read_headers_from_buffer(
         headers,
         message->message_buffer + AWS_EVENT_STREAM_PRELUDE_LENGTH,
         aws_event_stream_message_headers_len(message));
@@ -606,6 +617,43 @@ int aws_event_stream_add_string_header(
                                                         .header_value_type = AWS_EVENT_STREAM_HEADER_STRING};
 
     return s_add_variable_len_header(headers, &header, name, name_len, (uint8_t *)value, value_len, copy);
+}
+
+struct aws_event_stream_header_value_pair aws_event_stream_create_string_header(
+    struct aws_byte_cursor name,
+    struct aws_byte_cursor value) {
+    AWS_PRECONDITION(name.len < INT8_MAX);
+    AWS_PRECONDITION(value.len < INT16_MAX);
+
+    struct aws_event_stream_header_value_pair header = {
+        .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
+        .header_value.variable_len_val = value.ptr,
+        .header_value_len = (uint16_t)value.len,
+        .header_name_len = (uint8_t)name.len,
+        .value_owned = 0,
+    };
+
+    memcpy(header.header_name, name.ptr, name.len);
+
+    return header;
+}
+
+struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
+    struct aws_byte_cursor name,
+    int32_t value) {
+    AWS_PRECONDITION(name.len < INT8_MAX);
+
+    struct aws_event_stream_header_value_pair header = {
+        .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
+        .header_value_len = (uint16_t)sizeof(int32_t),
+        .header_name_len = (uint8_t)name.len,
+        .value_owned = 0,
+    };
+
+    memcpy(header.header_name, name.ptr, name.len);
+    aws_write_u32((uint32_t)value, header.header_value.static_val);
+
+    return header;
 }
 
 int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {

@@ -74,6 +74,8 @@ AWS_EVENT_STREAM_API void aws_event_stream_channel_handler_increment_read_window
     struct aws_channel_handler *handler,
     size_t window_update_size);
 
+AWS_EVENT_STREAM_API void *aws_event_stream_channel_handler_get_user_data(struct aws_channel_handler *handler);
+
 AWS_EXTERN_C_END
 
 #endif /* AWS_EVENT_STREAM_CHANNEL_HANDLER_H */
