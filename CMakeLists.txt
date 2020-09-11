@@ -27,6 +27,7 @@ include(AwsCFlags)
 include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
+include(AwsFindPackage)
 
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -72,8 +73,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 
-find_package(aws-c-common REQUIRED)
-find_package(aws-checksums REQUIRED)
+aws_use_package(aws-c-common)
+aws_use_package(aws-checksums)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
 
@@ -105,10 +106,12 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
 
 include(CTest)
 enable_testing()
-add_subdirectory(tests)
+if (BUILD_TESTING)
+    add_subdirectory(tests)
 
-if(NOT MSVC)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    if(NOT MSVC)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    endif()
+
+    add_subdirectory(bin)
 endif()
-
-add_subdirectory(bin)
