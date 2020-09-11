@@ -76,7 +76,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 aws_use_package(aws-c-common)
 aws_use_package(aws-checksums)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC AWS::aws-c-common AWS::aws-checksums)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 
 aws_prepare_shared_lib_exports(${PROJECT_NAME})
 
