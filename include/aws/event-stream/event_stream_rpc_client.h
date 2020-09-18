@@ -82,11 +82,15 @@ AWS_EXTERN_C_BEGIN
 AWS_EVENT_STREAM_API int aws_event_stream_rpc_client_connection_connect(
     struct aws_allocator *allocator,
     const struct aws_event_stream_rpc_client_connection_options *conn_options);
+AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_connection_acquire(
+    const struct aws_event_stream_rpc_client_connection *connection);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_connection_release(
-    struct aws_event_stream_rpc_client_connection *connection);
+    const struct aws_event_stream_rpc_client_connection *connection);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_connection_close(
     struct aws_event_stream_rpc_client_connection *connection,
     int shutdown_error_code);
+AWS_EVENT_STREAM_API bool aws_event_stream_rpc_client_connection_is_closed(
+    const struct aws_event_stream_rpc_client_connection *connection);
 
 AWS_EVENT_STREAM_API int aws_event_stream_rpc_client_connection_send_protocol_message(
     struct aws_event_stream_rpc_client_connection *connection,
@@ -98,11 +102,16 @@ AWS_EVENT_STREAM_API struct aws_event_stream_rpc_client_continuation_token *
     aws_event_stream_rpc_client_connection_new_stream(
         struct aws_event_stream_rpc_client_connection *connection,
         const struct aws_event_stream_rpc_client_stream_continuation_options *continuation_options);
+AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_continuation_acquire(
+    const struct aws_event_stream_rpc_client_continuation_token *continuation);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_continuation_release(
-    struct aws_event_stream_rpc_client_continuation_token *continuation);
+    const struct aws_event_stream_rpc_client_continuation_token *continuation);
+AWS_EVENT_STREAM_API bool aws_event_stream_rpc_client_continuation_is_closed(
+    const struct aws_event_stream_rpc_client_continuation_token *continuation);
 
 AWS_EVENT_STREAM_API int aws_event_stream_rpc_client_continuation_activate(
     struct aws_event_stream_rpc_client_continuation_token *continuation,
+    struct aws_byte_cursor operation_name,
     const struct aws_event_stream_rpc_message_args *message_args,
     aws_event_stream_rpc_client_message_flush_fn *flush_fn,
     void *user_data);

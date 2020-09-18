@@ -15,6 +15,7 @@
 
 #include <aws/event-stream/event_stream_channel_handler.h>
 #include <aws/event-stream/event_stream_rpc_server.h>
+#include <aws/event-stream/private/event_stream_rpc_priv.h>
 
 #include <aws/common/atomics.h>
 #include <aws/common/hash_table.h>
@@ -29,56 +30,8 @@
 #    pragma warning(disable : 4221)
 #endif
 
-static const struct aws_byte_cursor s_json_content_type_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(":content-type");
-static const struct aws_byte_cursor s_json_content_type_value =
-    AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("application/json");
-
-static const struct aws_byte_cursor s_invalid_stream_id_error =
-    AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("{ \"message\": \"non-zero stream-id field is only allowed for messages of "
-                                          "type APPLICATION_MESSAGE. The stream id max value is INT32_MAX.\"; }");
-
-static const struct aws_byte_cursor s_invalid_client_stream_id_error =
-    AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("{ \"message\": \"stream-id values must be monotonically incrementing. A "
-                                          "stream-id arrived that was lower than the last seen stream-id.\"; }");
-
-static const struct aws_byte_cursor s_invalid_new_client_stream_id_error =
-    AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("{ \"message\": \"stream-id values must be monotonically incrementing. A new "
-                                          "stream-id arrived that was incremented by more than 1.\"; }");
-
 static const struct aws_byte_cursor s_missing_operation_name_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
     "{ \"message\": \"The first message for on a non-zero :stream-id must contain an operation header value.\"; }");
-
-static const struct aws_byte_cursor s_invalid_message_type_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"an invalid value for message-type field was received.\"; }");
-
-static const struct aws_byte_cursor s_server_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"an error occurred on the server. This is not likely caused by your client.\"; }");
-
-static const struct aws_byte_cursor s_invalid_message_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"A message was received with missing required fields. Check that your client is sending at least, "
-    ":message-type, :message-flags, and :stream-id\"; }");
-
-static const struct aws_byte_cursor s_connect_not_completed_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"A CONNECT message must be received, and the CONNECT_ACK must be sent in response, before any "
-    "other message-types can be sent on this connection. In addition, only one CONNECT message is allowed on a "
-    "connection.\" }");
-
-static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;
-static const uint32_t s_bit_shift_magic = 16U;
-
-/* this is a repurposed hash function based on the technique in splitmix64. The magic number was a result of numerical
- * analysis on maximum bit entropy. */
-static uint64_t s_hash_uint32(const void *to_hash) {
-    uint32_t int_to_hash = *(const uint32_t *)to_hash;
-    uint32_t hash = ((int_to_hash >> s_bit_shift_magic) ^ int_to_hash) * s_bit_scrambling_magic;
-    hash = ((hash >> s_bit_shift_magic) ^ hash) * s_bit_scrambling_magic;
-    hash = (hash >> s_bit_shift_magic) ^ hash;
-    return (uint64_t)hash;
-}
-
-static bool s_uint32_eq(const void *a, const void *b) {
-    return *(const uint32_t *)a == *(const uint32_t *)b;
-}
 
 struct aws_event_stream_rpc_server_listener {
     struct aws_allocator *allocator;
@@ -154,8 +107,8 @@ static struct aws_event_stream_rpc_server_connection *s_create_connection_on_cha
             &connection->continuation_table,
             server->allocator,
             64,
-            s_hash_uint32,
-            s_uint32_eq,
+            aws_event_stream_rpc_hash_streamid,
+            aws_event_stream_rpc_streamid_eq,
             NULL,
             s_continuation_destroy)) {
         goto error;
@@ -630,72 +583,6 @@ int aws_event_stream_rpc_server_continuation_send_message(
         continuation->connection, continuation, message_args, continuation->stream_id, flush_fn, user_data);
 }
 
-/* just a convenience function for fetching message metadata from the event stream headers on a single iteration. */
-static int s_fetch_message_metadata(
-    struct aws_array_list *message_headers,
-    int32_t *stream_id,
-    int32_t *message_type,
-    int32_t *message_flags,
-    struct aws_byte_buf *operation_name) {
-    size_t length = aws_array_list_length(message_headers);
-    size_t required_fields_found = 0;
-    size_t optional_fields_found = 0;
-
-    for (size_t i = 0; i < length; ++i) {
-        struct aws_event_stream_header_value_pair *header = NULL;
-        aws_array_list_get_at_ptr(message_headers, (void **)&header, i);
-        struct aws_byte_buf name_buf = aws_event_stream_header_name(header);
-
-        /* check type first since that's cheaper than a string compare */
-        if (header->header_value_type == AWS_EVENT_STREAM_HEADER_INT32) {
-
-            struct aws_byte_buf stream_id_field = aws_byte_buf_from_array(
-                aws_event_stream_rpc_stream_id_name.ptr, aws_event_stream_rpc_stream_id_name.len);
-            if (aws_byte_buf_eq_ignore_case(&name_buf, &stream_id_field)) {
-                *stream_id = aws_event_stream_header_value_as_int32(header);
-                required_fields_found += 1;
-                goto found;
-            }
-
-            struct aws_byte_buf message_type_field = aws_byte_buf_from_array(
-                aws_event_stream_rpc_message_type_name.ptr, aws_event_stream_rpc_message_type_name.len);
-            if (aws_byte_buf_eq_ignore_case(&name_buf, &message_type_field)) {
-                *message_type = aws_event_stream_header_value_as_int32(header);
-                required_fields_found += 1;
-                goto found;
-            }
-
-            struct aws_byte_buf message_flags_field = aws_byte_buf_from_array(
-                aws_event_stream_rpc_message_flags_name.ptr, aws_event_stream_rpc_message_flags_name.len);
-            if (aws_byte_buf_eq_ignore_case(&name_buf, &message_flags_field)) {
-                *message_flags = aws_event_stream_header_value_as_int32(header);
-                required_fields_found += 1;
-                goto found;
-            }
-        }
-
-        if (header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING) {
-            struct aws_byte_buf operation_field = aws_byte_buf_from_array(
-                aws_event_stream_rpc_operation_name.ptr, aws_event_stream_rpc_operation_name.len);
-
-            if (aws_byte_buf_eq_ignore_case(&name_buf, &operation_field)) {
-                *operation_name = aws_event_stream_header_value_as_string(header);
-                optional_fields_found += 1;
-                goto found;
-            }
-        }
-
-        continue;
-
-    found:
-        if (required_fields_found == 3 && optional_fields_found == 1) {
-            return AWS_OP_SUCCESS;
-        }
-    }
-
-    return required_fields_found == 3 ? AWS_OP_SUCCESS : AWS_OP_ERR;
-}
-
 static void s_connection_error_message_flush_fn(int error_code, void *user_data) {
     (void)error_code;
 
@@ -819,7 +706,7 @@ static void s_route_message_by_type(
                 aws_mem_calloc(connection->allocator, 1, sizeof(struct aws_event_stream_rpc_server_continuation_token));
             if (!continuation) {
                 s_send_connection_level_error(
-                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
+                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
                 return;
             }
 
@@ -832,7 +719,7 @@ static void s_route_message_by_type(
                 /* continuation release will drop the connection reference as well */
                 aws_event_stream_rpc_server_continuation_release(continuation);
                 s_send_connection_level_error(
-                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
+                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
                 return;
             }
 
@@ -844,7 +731,7 @@ static void s_route_message_by_type(
                     continuation->connection, continuation, operation_name, &options, connection->user_data)) {
                 aws_event_stream_rpc_server_continuation_release(continuation);
                 s_send_connection_level_error(
-                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
+                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
                 return;
             }
             AWS_FATAL_ASSERT(options.on_continuation);
@@ -896,13 +783,13 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
         if (aws_array_list_init_dynamic(
                 &headers, connection->allocator, 8, sizeof(struct aws_event_stream_header_value_pair))) {
             s_send_connection_level_error(
-                connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
+                connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
             return;
         }
 
         if (aws_event_stream_message_headers(message, &headers)) {
             s_send_connection_level_error(
-                connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_SERVER_ERROR, 0, &s_server_error);
+                connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
             goto clean_up;
         }
 
@@ -912,7 +799,8 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
 
         struct aws_byte_buf operation_name_buf;
         AWS_ZERO_STRUCT(operation_name_buf);
-        if (s_fetch_message_metadata(&headers, &stream_id, &message_type, &message_flags, &operation_name_buf)) {
+        if (aws_event_stream_rpc_fetch_message_metadata(
+                &headers, &stream_id, &message_type, &message_flags, &operation_name_buf)) {
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_message_error);
             goto clean_up;
