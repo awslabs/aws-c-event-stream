@@ -28,6 +28,8 @@ include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
 include(AwsFindPackage)
+include(AwsCheckHeaders)
+
 
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -36,10 +38,6 @@ endif()
 
 file(GLOB AWS_EVENT_STREAM_HEADERS
      "include/aws/event-stream/*.h"
-)
-
-file(GLOB AWS_EVENT_STREAM_PRIV_HEADERS
-     "include/aws/event-stream/private/*.h"
 )
 
 file(GLOB AWS_EVENT_STREAM_SRC
@@ -65,6 +63,8 @@ add_library(${PROJECT_NAME} ${EVENT_STREAM_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_add_sanitizers(${PROJECT_NAME})
 aws_prepare_symbol_visibility_args(${PROJECT_NAME} "AWS_EVENT_STREAM")
+
+aws_check_headers(${PROJECT_NAME} ${AWS_EVENT_STREAM_HEADERS})
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
