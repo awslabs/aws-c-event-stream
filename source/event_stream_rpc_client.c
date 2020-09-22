@@ -74,8 +74,6 @@ static int s_create_connection_on_channel(
         goto error;
     }
 
-    aws_event_stream_rpc_client_connection_acquire(connection);
-
     connection->event_stream_handler = event_stream_handler;
     connection->channel = channel;
     aws_channel_acquire_hold(channel);
@@ -168,6 +166,7 @@ int aws_event_stream_rpc_client_connection_connect(
     aws_client_bootstrap_acquire(connection->bootstrap_ref);
     aws_atomic_init_int(&connection->handshake_complete, 0);
     aws_atomic_init_int(&connection->is_closed, 0);
+    aws_mutex_init(&connection->stream_id_semaphore);
 
     connection->on_connection_shutdown = conn_options->on_connection_shutdown;
     connection->on_connection_protocol_message = conn_options->on_connection_protocol_message;
@@ -344,6 +343,10 @@ static int s_send_protocol_message(
     if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK &&
         !(message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED)) {
         args->terminate_connection = true;
+    }
+
+    if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
+        aws_atomic_store_int(&connection->handshake_complete, 1u);
     }
 
     args->flush_fn = flush_fn;
@@ -533,13 +536,13 @@ static void s_route_message_by_type(
         }
 
         if (message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
-            if (handshake_complete) {
+            if (handshake_complete != 1u) {
                 /* only one connect is allowed. This would be a duplicate. */
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_connect_not_completed_error);
                 return;
             }
-            aws_atomic_store_int(&connection->handshake_complete, 1U);
+            aws_atomic_store_int(&connection->handshake_complete, 2U);
         }
 
         connection->on_connection_protocol_message(connection, &message_args, connection->user_data);
@@ -635,6 +638,11 @@ void aws_event_stream_rpc_client_continuation_release(
         aws_event_stream_rpc_client_connection_release(continuation_mut->connection);
         aws_mem_release(allocator, continuation_mut);
     }
+}
+
+bool aws_event_stream_rpc_client_continuation_is_closed(
+    const struct aws_event_stream_rpc_client_continuation_token *continuation) {
+    return aws_atomic_load_int(&continuation->is_closed) == 1u;
 }
 
 int aws_event_stream_rpc_client_continuation_activate(

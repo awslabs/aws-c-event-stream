@@ -186,6 +186,10 @@ void aws_event_stream_rpc_server_connection_acquire(struct aws_event_stream_rpc_
 }
 
 void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_server_connection *connection) {
+    if (!connection) {
+        return;
+    }
+
     size_t value = aws_atomic_fetch_sub_explicit(&connection->ref_count, 1, aws_memory_order_seq_cst);
 
     if (value == 1) {
@@ -347,6 +351,10 @@ static void s_destroy_server(struct aws_event_stream_rpc_server_listener *server
 }
 
 void aws_event_stream_rpc_server_listener_release(struct aws_event_stream_rpc_server_listener *server) {
+    if (!server) {
+        return;
+    }
+
     size_t ref_count = aws_atomic_fetch_sub_explicit(&server->ref_count, 1, aws_memory_order_seq_cst);
 
     if (ref_count == 1) {

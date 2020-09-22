@@ -17,7 +17,7 @@ struct test_data {
     struct aws_allocator *allocator;
     struct testing_channel testing_channel;
     struct aws_event_loop_group *el_group;
-    struct aws_server_bootstrap *bootstrap;
+    struct aws_server_bootstrap *server_bootstrap;
     struct aws_event_stream_rpc_server_listener *listener;
     struct aws_event_stream_rpc_server_connection *connection;
     aws_event_stream_rpc_server_connection_protocol_message_fn *received_fn;
@@ -49,14 +49,14 @@ static void s_on_stream_continuation_shim(
     test_data->on_continuation(token, message_args, test_data->continuation_user_data);
 }
 
-static void s_stream_continuation_closed_shim(
+static void s_server_stream_continuation_closed_shim(
     struct aws_event_stream_rpc_server_continuation_token *token,
     void *user_data) {
     struct test_data *test_data = user_data;
     test_data->on_continuation_closed(token, test_data->continuation_user_data);
 }
 
-static int s_on_incoming_stream_shim(
+static int s_on_server_incoming_stream_shim(
     struct aws_event_stream_rpc_server_connection *connection,
     struct aws_event_stream_rpc_server_continuation_token *token,
     struct aws_byte_cursor operation_name,
@@ -65,7 +65,7 @@ static int s_on_incoming_stream_shim(
     struct test_data *test_data = user_data;
 
     continuation_options->on_continuation = s_on_stream_continuation_shim;
-    continuation_options->on_continuation_closed = s_stream_continuation_closed_shim;
+    continuation_options->on_continuation_closed = s_server_stream_continuation_closed_shim;
     continuation_options->user_data = test_data;
 
     if (test_data->on_new_stream) {
@@ -76,7 +76,7 @@ static int s_on_incoming_stream_shim(
     return AWS_OP_SUCCESS;
 }
 
-static int s_fixture_on_new_connection(
+static int s_fixture_on_new_server_connection(
     struct aws_event_stream_rpc_server_connection *connection,
     int error_code,
     struct aws_event_stream_rpc_connection_options *connection_options,
@@ -89,7 +89,7 @@ static int s_fixture_on_new_connection(
     return AWS_OP_SUCCESS;
 }
 
-static void s_fixture_on_connection_shutdown(
+static void s_fixture_on_server_connection_shutdown(
     struct aws_event_stream_rpc_server_connection *connection,
     int error_code,
     void *user_data) {
@@ -126,8 +126,8 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     };
     test_data->el_group = aws_event_loop_group_new_default(allocator, 0, &el_shutdown_options);
     ASSERT_NOT_NULL(test_data->el_group);
-    test_data->bootstrap = aws_server_bootstrap_new(allocator, test_data->el_group);
-    ASSERT_NOT_NULL(test_data->bootstrap);
+    test_data->server_bootstrap = aws_server_bootstrap_new(allocator, test_data->el_group);
+    ASSERT_NOT_NULL(test_data->server_bootstrap);
 
     ASSERT_SUCCESS(aws_mutex_init(&test_data->shutdown_lock));
     ASSERT_SUCCESS(aws_condition_variable_init(&test_data->shutdown_cvar));
@@ -142,10 +142,10 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .socket_options = &socket_options,
         .host_name = "127.0.0.1",
         .port = 30123,
-        .bootstrap = test_data->bootstrap,
+        .bootstrap = test_data->server_bootstrap,
         .user_data = test_data,
-        .on_new_connection = s_fixture_on_new_connection,
-        .on_connection_shutdown = s_fixture_on_connection_shutdown,
+        .on_new_connection = s_fixture_on_new_server_connection,
+        .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
         .on_destroy_callback = s_on_listener_destroy,
     };
 
@@ -161,7 +161,7 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
 
     struct aws_event_stream_rpc_connection_options connection_options = {
         .on_connection_protocol_message = s_fixture_on_protocol_message,
-        .on_incoming_stream = s_on_incoming_stream_shim,
+        .on_incoming_stream = s_on_server_incoming_stream_shim,
         .user_data = test_data,
     };
 
@@ -192,7 +192,7 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
             &test_data->shutdown_cvar, &test_data->shutdown_lock, s_shutdown_predicate_fn, test_data);
         test_data->shutdown_completed = false;
         aws_mutex_unlock(&test_data->shutdown_lock);
-        aws_server_bootstrap_release(test_data->bootstrap);
+        aws_server_bootstrap_release(test_data->server_bootstrap);
         aws_event_loop_group_release(test_data->el_group);
         aws_mutex_lock(&test_data->shutdown_lock);
         aws_condition_variable_wait_pred(
