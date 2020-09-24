@@ -54,6 +54,12 @@ static struct aws_error_info s_errors[] = {
         AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED,
         "event stream rpc connection stream is closed.",
         LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_RPC_STREAM_NOT_ACTIVATED,
+        "event stream rpc stream continuation was not successfully activated before use. Call "
+        "aws_event_stream_rpc_client_continuation_activate()"
+        " before using a stream continuation token.",
+        LIB_NAME),
 };
 
 static struct aws_error_info_list s_list = {
