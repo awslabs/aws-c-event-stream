@@ -655,6 +655,15 @@ int aws_event_stream_rpc_client_continuation_activate(
     int ret_val = AWS_OP_ERR;
 
     aws_mutex_lock(&continuation->connection->stream_id_semaphore);
+
+    if (continuation->stream_id) {
+        aws_raise_error(AWS_ERROR_INVALID_STATE);
+        goto clean_up;
+    }
+
+    /* we cannot update the connection's stream id until we're certain the message at least made it to the wire, because
+     * the next stream id must be consecutively increasing by 1. So send the message then update the connection state
+     * once we've made it to the wire. */
     uint32_t stream_id = continuation->connection->latest_stream_id + 1;
 
     if (aws_hash_table_put(&continuation->connection->continuation_table, &stream_id, continuation, NULL)) {
@@ -664,13 +673,15 @@ int aws_event_stream_rpc_client_continuation_activate(
     /* The continuation table gets a ref count on the continuation. Take it here. */
     aws_event_stream_rpc_client_continuation_acquire(continuation);
 
+    continuation->stream_id = stream_id;
+
     if (s_send_protocol_message(
             continuation->connection, continuation, &operation_name, message_args, stream_id, flush_fn, user_data)) {
         aws_hash_table_remove(&continuation->connection->continuation_table, &stream_id, NULL, NULL);
+        continuation->stream_id = 0;
         goto clean_up;
     }
 
-    continuation->stream_id = stream_id;
     continuation->connection->latest_stream_id = stream_id;
     ret_val = AWS_OP_SUCCESS;
 
