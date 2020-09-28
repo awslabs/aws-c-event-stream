@@ -160,6 +160,9 @@ AWS_EVENT_STREAM_API int aws_event_stream_rpc_client_continuation_activate(
     aws_event_stream_rpc_client_message_flush_fn *flush_fn,
     void *user_data);
 
+AWS_EVENT_STREAM_API void *aws_event_stream_rpc_client_continuation_get_user_data(
+    struct aws_event_stream_rpc_client_continuation_token *continuation);
+
 /**
  * Sends a message on the continuation. aws_event_stream_rpc_client_continuation_activate() must be successfully invoked
  * prior to calling this function.

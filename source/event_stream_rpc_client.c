@@ -615,6 +615,11 @@ struct aws_event_stream_rpc_client_continuation_token *aws_event_stream_rpc_clie
     return continuation;
 }
 
+void *aws_event_stream_rpc_client_continuation_get_user_data(
+    struct aws_event_stream_rpc_client_continuation_token *continuation) {
+    return continuation->user_data;
+}
+
 void aws_event_stream_rpc_client_continuation_acquire(
     const struct aws_event_stream_rpc_client_continuation_token *continuation) {
     aws_atomic_fetch_add_explicit(
