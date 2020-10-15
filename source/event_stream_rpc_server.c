@@ -285,11 +285,13 @@ static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap,
 
     struct aws_event_stream_rpc_server_listener *listener = user_data;
 
-    if (listener->on_destroy_callback && listener->initialized) {
-        listener->on_destroy_callback(listener, listener->user_data);
-    }
+    if (listener->initialized) {
+        if (listener->on_destroy_callback) {
+            listener->on_destroy_callback(listener, listener->user_data);
+        }
 
-    aws_mem_release(listener->allocator, listener);
+        aws_mem_release(listener->allocator, listener);
+    }
 }
 
 struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_listener(

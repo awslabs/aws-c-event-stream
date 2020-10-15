@@ -166,7 +166,8 @@ int aws_event_stream_rpc_client_connection_connect(
     connection->allocator = allocator;
     aws_atomic_init_int(&connection->ref_count, 1);
     connection->bootstrap_ref = conn_options->bootstrap;
-    /* this is released in the connection release which gets called regardless of if this function is successful or not*/
+    /* this is released in the connection release which gets called regardless of if this function is successful or
+     * not*/
     aws_client_bootstrap_acquire(connection->bootstrap_ref);
     aws_atomic_init_int(&connection->handshake_complete, 0);
     aws_atomic_init_int(&connection->is_closed, 0);
