@@ -6,7 +6,7 @@ enable_testing()
 file(GLOB TEST_SRC "*.c")
 file(GLOB TESTS ${TEST_SRC})
 
-set(TEST_BINARY_NAME ${CMAKE_PROJECT_NAME}-tests)
+set(TEST_BINARY_NAME ${PROJECT_NAME}-tests)
 
 add_test_case(test_incoming_no_op_valid)
 add_test_case(test_incoming_application_data_no_headers_valid)
