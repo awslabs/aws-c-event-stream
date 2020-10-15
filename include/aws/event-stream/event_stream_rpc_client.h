@@ -81,7 +81,7 @@ AWS_EXTERN_C_BEGIN
 
 /**
  * Initiate a new connection. If this function returns AWS_OP_SUCESSS, the
- * aws_event_stream_rpc_client_connection_options::on_connection_setup is guranteed to be called exactly once. If that
+ * aws_event_stream_rpc_client_connection_options::on_connection_setup is guaranteed to be called exactly once. If that
  * callback successfully creates a connection, aws_event_stream_rpc_client_connection_options::on_connection_shutdown
  * will be invoked upon connection closure. However if the connection was never successfully setup,
  * aws_event_stream_rpc_client_connection_options::on_connection_shutdown will not be invoked later.

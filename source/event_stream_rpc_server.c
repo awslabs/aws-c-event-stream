@@ -285,6 +285,9 @@ static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap,
 
     struct aws_event_stream_rpc_server_listener *listener = user_data;
 
+    /* server bootstrap invokes this callback regardless of if the listener was successfully created, so
+     * just check that we successfully set it up before freeing anything. When that's fixed in aws-c-io, this
+     * code will still be correct, so just leave it here for now. */
     if (listener->initialized) {
         if (listener->on_destroy_callback) {
             listener->on_destroy_callback(listener, listener->user_data);
