@@ -20,7 +20,7 @@ struct aws_event_stream_rpc_client_connection {
     struct aws_channel *channel;
     struct aws_channel_handler *event_stream_handler;
     uint32_t latest_stream_id;
-    struct aws_mutex stream_id_semaphore;
+    struct aws_mutex stream_lock;
     struct aws_atomic_var is_closed;
     struct aws_atomic_var handshake_complete;
     size_t initial_window_size;
@@ -125,9 +125,9 @@ static void s_on_channel_shutdown_fn(
     struct aws_event_stream_rpc_client_connection *connection = user_data;
 
     if (connection->bootstrap_owned) {
-        aws_mutex_lock(&connection->stream_id_semaphore);
+        aws_mutex_lock(&connection->stream_lock);
         aws_hash_table_clear(&connection->continuation_table);
-        aws_mutex_unlock(&connection->stream_id_semaphore);
+        aws_mutex_unlock(&connection->stream_lock);
         aws_event_stream_rpc_client_connection_acquire(connection);
         connection->on_connection_shutdown(connection, error_code, connection->user_data);
         aws_event_stream_rpc_client_connection_release(connection);
@@ -152,6 +152,9 @@ int aws_event_stream_rpc_client_connection_connect(
     const struct aws_event_stream_rpc_client_connection_options *conn_options) {
     AWS_PRECONDITION(allocator);
     AWS_PRECONDITION(conn_options);
+    AWS_PRECONDITION(conn_options->on_connection_protocol_message);
+    AWS_PRECONDITION(conn_options->on_connection_setup);
+    AWS_PRECONDITION(conn_options->on_connection_shutdown);
 
     struct aws_event_stream_rpc_client_connection *connection =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_event_stream_rpc_client_connection));
@@ -163,10 +166,11 @@ int aws_event_stream_rpc_client_connection_connect(
     connection->allocator = allocator;
     aws_atomic_init_int(&connection->ref_count, 1);
     connection->bootstrap_ref = conn_options->bootstrap;
+    /* this is released in the connection release which gets called regardless of if this function is successful or not*/
     aws_client_bootstrap_acquire(connection->bootstrap_ref);
     aws_atomic_init_int(&connection->handshake_complete, 0);
     aws_atomic_init_int(&connection->is_closed, 0);
-    aws_mutex_init(&connection->stream_id_semaphore);
+    aws_mutex_init(&connection->stream_lock);
 
     connection->on_connection_shutdown = conn_options->on_connection_shutdown;
     connection->on_connection_protocol_message = conn_options->on_connection_protocol_message;
@@ -242,9 +246,9 @@ void aws_event_stream_rpc_client_connection_close(
         aws_channel_shutdown(connection->channel, shutdown_error_code);
 
         if (!connection->bootstrap_owned) {
-            aws_mutex_lock(&connection->stream_id_semaphore);
+            aws_mutex_lock(&connection->stream_lock);
             aws_hash_table_clear(&connection->continuation_table);
-            aws_mutex_unlock(&connection->stream_id_semaphore);
+            aws_mutex_unlock(&connection->stream_lock);
             aws_event_stream_rpc_client_connection_release(connection);
         }
     }
@@ -502,18 +506,18 @@ static void s_route_message_by_type(
             return;
         }
 
-        aws_mutex_lock(&connection->stream_id_semaphore);
+        aws_mutex_lock(&connection->stream_lock);
         struct aws_hash_element *continuation_element = NULL;
         if (aws_hash_table_find(&connection->continuation_table, &stream_id, &continuation_element) ||
             !continuation_element) {
-            aws_mutex_unlock(&connection->stream_id_semaphore);
+            aws_mutex_unlock(&connection->stream_lock);
             aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_client_stream_id_error);
             return;
         }
 
-        aws_mutex_unlock(&connection->stream_id_semaphore);
+        aws_mutex_unlock(&connection->stream_lock);
 
         continuation = continuation_element->value;
         aws_event_stream_rpc_client_continuation_acquire(continuation);
@@ -523,9 +527,9 @@ static void s_route_message_by_type(
         /* if it was a terminal stream message purge it from the hash table. The delete will decref the continuation. */
         if (message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
             aws_atomic_store_int(&continuation->is_closed, 1U);
-            aws_mutex_lock(&connection->stream_id_semaphore);
+            aws_mutex_lock(&connection->stream_lock);
             aws_hash_table_remove(&connection->continuation_table, &stream_id, NULL, NULL);
-            aws_mutex_unlock(&connection->stream_id_semaphore);
+            aws_mutex_unlock(&connection->stream_lock);
         }
     } else {
         if (message_type <= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR ||
@@ -659,7 +663,7 @@ int aws_event_stream_rpc_client_continuation_activate(
 
     int ret_val = AWS_OP_ERR;
 
-    aws_mutex_lock(&continuation->connection->stream_id_semaphore);
+    aws_mutex_lock(&continuation->connection->stream_lock);
 
     if (continuation->stream_id) {
         aws_raise_error(AWS_ERROR_INVALID_STATE);
@@ -697,7 +701,7 @@ int aws_event_stream_rpc_client_continuation_activate(
     ret_val = AWS_OP_SUCCESS;
 
 clean_up:
-    aws_mutex_unlock(&continuation->connection->stream_id_semaphore);
+    aws_mutex_unlock(&continuation->connection->stream_lock);
     return ret_val;
 }
 

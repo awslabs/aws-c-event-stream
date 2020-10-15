@@ -43,6 +43,7 @@ struct aws_event_stream_rpc_server_listener {
     aws_event_stream_rpc_server_on_listener_destroy_fn *on_destroy_callback;
     size_t initial_window_size;
     bool enable_read_backpressure;
+    bool initialized;
     void *user_data;
 };
 
@@ -284,7 +285,7 @@ static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap,
 
     struct aws_event_stream_rpc_server_listener *listener = user_data;
 
-    if (listener->on_destroy_callback) {
+    if (listener->on_destroy_callback && listener->initialized) {
         listener->on_destroy_callback(listener, listener->user_data);
     }
 
@@ -317,17 +318,19 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     };
 
     server->bootstrap = options->bootstrap;
-    server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
     server->allocator = allocator;
     server->on_destroy_callback = options->on_destroy_callback;
     server->on_new_connection = options->on_new_connection;
     server->on_connection_shutdown = options->on_connection_shutdown;
     server->user_data = options->user_data;
 
+    server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
+
     if (!server->listener) {
         goto error;
     }
 
+    server->initialized = true;
     return server;
 
 error:
