@@ -123,6 +123,7 @@ static void s_on_channel_shutdown_fn(
     (void)bootstrap;
 
     struct aws_event_stream_rpc_client_connection *connection = user_data;
+    aws_atomic_store_int(&connection->is_closed, 1u);
 
     if (connection->bootstrap_owned) {
         aws_mutex_lock(&connection->stream_lock);
