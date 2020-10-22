@@ -12,6 +12,11 @@
 
 #include <aws/io/channel_bootstrap.h>
 
+#ifdef _MSC_VER
+/* allow declared initializer using address of automatic variable */
+#    pragma warning(disable : 4221)
+#endif
+
 struct aws_event_stream_rpc_client_connection {
     struct aws_allocator *allocator;
     struct aws_hash_table continuation_table;
