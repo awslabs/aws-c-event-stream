@@ -361,6 +361,8 @@ struct client_test_data {
 };
 
 static void s_rpc_client_message_flush(int error_code, void *user_data) {
+    (void)error_code;
+
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
     client_test_data->message_sent = true;

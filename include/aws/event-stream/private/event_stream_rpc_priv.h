@@ -41,7 +41,7 @@ static const struct aws_byte_cursor s_invalid_message_error = AWS_BYTE_CUR_INIT_
     ":message-type, :message-flags, and :stream-id\"; }");
 
 static const struct aws_byte_cursor s_internal_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"an error occurred on the peer endpoint. This is not likely caused by your endpoint.\"; }");
+    "{ \"message\": \"An error occurred on the peer endpoint. This is not likely caused by your endpoint.\"; }");
 
 static const struct aws_byte_cursor s_connect_not_completed_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
     "{ \"message\": \"A CONNECT message must be received, and the CONNECT_ACK must be sent in response, before any "
