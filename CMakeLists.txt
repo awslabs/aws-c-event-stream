@@ -28,6 +28,7 @@ include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
 include(AwsFindPackage)
+include(AwsCheckHeaders)
 
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -36,10 +37,6 @@ endif()
 
 file(GLOB AWS_EVENT_STREAM_HEADERS
      "include/aws/event-stream/*.h"
-)
-
-file(GLOB AWS_EVENT_STREAM_PRIV_HEADERS
-     "include/aws/event-stream/private/*.h"
 )
 
 file(GLOB AWS_EVENT_STREAM_SRC
@@ -65,6 +62,7 @@ add_library(${PROJECT_NAME} ${EVENT_STREAM_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_add_sanitizers(${PROJECT_NAME})
 aws_prepare_symbol_visibility_args(${PROJECT_NAME} "AWS_EVENT_STREAM")
+aws_check_headers(${PROJECT_NAME} ${AWS_EVENT_STREAM_HEADERS})
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -72,9 +70,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
-set_target_properties(${PROJECT_NAME} PROPERTIES SOVERSION 0unstable)
 
 aws_use_package(aws-c-io)
+aws_use_package(aws-c-common)
 aws_use_package(aws-checksums)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
@@ -107,10 +105,12 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
 
 include(CTest)
 enable_testing()
-add_subdirectory(tests)
+if (BUILD_TESTING)
+    add_subdirectory(tests)
 
-if(NOT MSVC)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    if(NOT MSVC)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    endif()
+
+    add_subdirectory(bin)
 endif()
-
-add_subdirectory(bin)
