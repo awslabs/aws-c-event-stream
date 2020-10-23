@@ -43,6 +43,7 @@ struct test_data {
     bool client_setup_completed;
     bool server_setup_completed;
     bool client_connection_shutdown;
+    bool server_connection_shutdown_completed;
     bool event_loop_shutdown_completed;
     bool listener_shutdown_completed;
     bool resolver_shutdown_completed;
@@ -122,7 +123,18 @@ static void s_fixture_on_server_connection_shutdown(
     void *user_data) {
     (void)connection;
     (void)error_code;
-    (void)user_data;
+
+    struct test_data *test_data = user_data;
+
+    aws_mutex_lock(&test_data->shutdown_lock);
+    test_data->server_connection_shutdown_completed = true;
+    aws_mutex_unlock(&test_data->shutdown_lock);
+    aws_condition_variable_notify_one(&test_data->shutdown_cvar);
+}
+
+static bool s_server_connection_shutdown_completed(void *args) {
+    struct test_data *test_data = args;
+    return test_data->server_connection_shutdown_completed;
 }
 
 static void s_on_listener_destroy(struct aws_event_stream_rpc_server_listener *server, void *user_data) {
@@ -185,6 +197,11 @@ static void s_client_on_connection_shutdown(
     test_data->client_connection_shutdown = true;
     aws_mutex_unlock(&test_data->shutdown_lock);
     aws_condition_variable_notify_one(&test_data->shutdown_cvar);
+}
+
+static bool s_client_connection_shutdown_completed(void *args) {
+    struct test_data *test_data = args;
+    return test_data->client_connection_shutdown;
 }
 
 static void s_client_connection_protocol_message(
@@ -302,10 +319,14 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
     struct test_data *test_data = ctx;
 
     if (!setup_result) {
+        aws_mutex_lock(&test_data->shutdown_lock);
+        aws_condition_variable_wait_pred(
+            &test_data->shutdown_cvar, &test_data->shutdown_lock, s_server_connection_shutdown_completed, test_data);
+        aws_condition_variable_wait_pred(
+            &test_data->shutdown_cvar, &test_data->shutdown_lock, s_client_connection_shutdown_completed, test_data);
         aws_event_stream_rpc_client_connection_release(test_data->client_connection);
         aws_event_stream_rpc_server_connection_release(test_data->server_connection);
         aws_event_stream_rpc_server_listener_release(test_data->listener);
-        aws_mutex_lock(&test_data->shutdown_lock);
         aws_condition_variable_wait_pred(
             &test_data->shutdown_cvar, &test_data->shutdown_lock, s_listener_shutdown_pred, test_data);
         aws_server_bootstrap_release(test_data->server_bootstrap);
