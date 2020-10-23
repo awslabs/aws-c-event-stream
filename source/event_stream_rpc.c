@@ -72,7 +72,7 @@ int aws_event_stream_rpc_fetch_message_metadata(
                 *operation_name = aws_event_stream_header_value_as_string(header);
                 AWS_LOGF_DEBUG(
                     AWS_LS_EVENT_STREAM_GENERAL,
-                    "operation name header value %" PRInSTR,
+                    "operation name header value" PRInSTR,
                     AWS_BYTE_BUF_PRI(*operation_name));
                 optional_fields_found += 1;
                 goto found;
