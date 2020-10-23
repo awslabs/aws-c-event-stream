@@ -881,6 +881,12 @@ static int s_test_event_stream_rpc_client_connection_continuation_flow(struct aw
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
+        s_rpc_client_message_transmission_completed_pred,
+        &client_test_data);
+
+    aws_condition_variable_wait_pred(
+        &client_test_data.sync_cvar,
+        &client_test_data.sync_lock,
         s_rpc_client_continuation_token_closed_pred,
         &client_test_data);
 
