@@ -23,6 +23,8 @@
 #include <aws/io/channel.h>
 #include <aws/io/channel_bootstrap.h>
 
+#include <inttypes.h>
+
 #if defined(_MSC_VER)
 /* allow non-constant aggregate initializer */
 #    pragma warning(disable : 4204)
@@ -78,6 +80,7 @@ struct aws_event_stream_rpc_server_continuation_token {
  */
 void s_continuation_destroy(void *value) {
     struct aws_event_stream_rpc_server_continuation_token *continuation = value;
+    AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying continuation", (void *)continuation);
     continuation->closed_fn(continuation, continuation->user_data);
     aws_event_stream_rpc_server_continuation_release(continuation);
 }
@@ -89,15 +92,24 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
 static struct aws_event_stream_rpc_server_connection *s_create_connection_on_channel(
     struct aws_event_stream_rpc_server_listener *server,
     struct aws_channel *channel) {
+
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: creating connection on channel %p", (void *)server, (void *)channel);
     struct aws_event_stream_rpc_server_connection *connection =
         aws_mem_calloc(server->allocator, 1, sizeof(struct aws_event_stream_rpc_server_connection));
     struct aws_channel_handler *event_stream_handler = NULL;
     struct aws_channel_slot *slot = NULL;
 
     if (!connection) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: allocation failed for connection with error %s",
+            (void *)server,
+            aws_error_debug_str(aws_last_error()));
         return NULL;
     }
 
+    AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: new connection is %p", (void *)server, (void *)connection);
     aws_atomic_init_int(&connection->ref_count, 1);
     /* handshake step 1 is a connect message being received. Handshake 2 is the connect ack being sent.
      * no messages other than connect and connect ack are allowed until this count reaches 2. */
@@ -112,6 +124,11 @@ static struct aws_event_stream_rpc_server_connection *s_create_connection_on_cha
             aws_event_stream_rpc_streamid_eq,
             NULL,
             s_continuation_destroy)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: initialization of connection stream table failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto error;
     }
 
@@ -125,17 +142,32 @@ static struct aws_event_stream_rpc_server_connection *s_create_connection_on_cha
     event_stream_handler = aws_event_stream_channel_handler_new(server->allocator, &handler_options);
 
     if (!event_stream_handler) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: initialization of event-stream handler failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto error;
     }
 
     slot = aws_channel_slot_new(channel);
 
     if (!slot) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: initialization of channel slot failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto error;
     }
 
     aws_channel_slot_insert_end(channel, slot);
     if (aws_channel_slot_set_handler(slot, event_stream_handler)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: setting the handler on the slot failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto error;
     }
 
@@ -183,7 +215,12 @@ struct aws_event_stream_rpc_server_connection *aws_event_stream_rpc_server_conne
 }
 
 void aws_event_stream_rpc_server_connection_acquire(struct aws_event_stream_rpc_server_connection *connection) {
-    aws_atomic_fetch_add_explicit(&connection->ref_count, 1, aws_memory_order_relaxed);
+    size_t current_count = aws_atomic_fetch_add_explicit(&connection->ref_count, 1, aws_memory_order_relaxed);
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: connection acquired, new ref count is %zu.",
+        (void *)connection,
+        current_count + 1);
 }
 
 void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_server_connection *connection) {
@@ -193,7 +230,13 @@ void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_
 
     size_t value = aws_atomic_fetch_sub_explicit(&connection->ref_count, 1, aws_memory_order_seq_cst);
 
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: connection released, new ref count is %zu.",
+        (void *)connection,
+        value - 1);
     if (value == 1) {
+        AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying connection.", (void *)connection);
         aws_channel_release_hold(connection->channel);
         aws_hash_table_clean_up(&connection->continuation_table);
         aws_event_stream_rpc_server_listener_release(connection->server);
@@ -212,6 +255,11 @@ static void s_on_accept_channel_setup(
     struct aws_event_stream_rpc_server_listener *server = user_data;
 
     if (!error_code) {
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: incoming connection with channel %p.",
+            (void *)server,
+            (void *)channel);
         AWS_FATAL_ASSERT(channel && "Channel should never be null with a 0 error code.");
 
         struct aws_event_stream_rpc_server_connection *connection = s_create_connection_on_channel(server, channel);
@@ -226,6 +274,12 @@ static void s_on_accept_channel_setup(
         AWS_ZERO_STRUCT(connection_options);
 
         aws_event_stream_rpc_server_connection_acquire(connection);
+        AWS_LOGF_TRACE(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: invoking on_new_connection with connection %p.",
+            (void *)server,
+            (void *)connection);
+
         if (server->on_new_connection(connection, AWS_ERROR_SUCCESS, &connection_options, server->user_data)) {
             aws_channel_shutdown(channel, aws_last_error());
             aws_event_stream_rpc_server_connection_release(connection);
@@ -242,6 +296,11 @@ static void s_on_accept_channel_setup(
         aws_event_stream_rpc_server_connection_release(connection);
 
     } else {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: invoking on_new_connection with error %s",
+            (void *)server,
+            aws_error_debug_str(error_code));
         server->on_new_connection(NULL, error_code, NULL, server->user_data);
     }
 }
@@ -270,8 +329,16 @@ static void s_on_accept_channel_shutdown(
     (void)bootstrap;
 
     struct aws_event_stream_rpc_server_listener *server = user_data;
-
     struct aws_event_stream_rpc_server_connection *connection = s_rpc_connection_from_channel(channel);
+
+    AWS_LOGF_DEBUG(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: channel %p and connection %p shutdown occurred with error %s",
+        (void *)server,
+        (void *)channel,
+        (void *)connection,
+        aws_error_debug_str(error_code));
+
     aws_atomic_store_int(&connection->is_closed, 1U);
     aws_hash_table_clear(&connection->continuation_table);
     aws_event_stream_rpc_server_connection_acquire(connection);
@@ -282,8 +349,9 @@ static void s_on_accept_channel_shutdown(
 
 static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap, void *user_data) {
     (void)bootstrap;
-
     struct aws_event_stream_rpc_server_listener *listener = user_data;
+
+    AWS_LOGF_INFO(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying server", (void *)listener);
 
     /* server bootstrap invokes this callback regardless of if the listener was successfully created, so
      * just check that we successfully set it up before freeing anything. When that's fixed in aws-c-io, this
@@ -304,9 +372,14 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         aws_mem_calloc(allocator, 1, sizeof(struct aws_event_stream_rpc_server_listener));
 
     if (!server) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "static: failed to allocate new server with error %s",
+            aws_error_debug_str(aws_last_error()));
         return NULL;
     }
 
+    AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "static: new server is %p", (void *)server);
     aws_atomic_init_int(&server->ref_count, 1);
 
     struct aws_server_socket_channel_bootstrap_options bootstrap_options = {
@@ -332,6 +405,10 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
 
     if (!server->listener) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "static: failed to allocate new socket listener with error %s",
+            aws_error_debug_str(aws_last_error()));
         goto error;
     }
 
@@ -348,11 +425,18 @@ error:
 }
 
 void aws_event_stream_rpc_server_listener_acquire(struct aws_event_stream_rpc_server_listener *server) {
-    aws_atomic_fetch_add_explicit(&server->ref_count, 1, aws_memory_order_relaxed);
+    size_t current_count = aws_atomic_fetch_add_explicit(&server->ref_count, 1, aws_memory_order_relaxed);
+
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: server acquired, new ref count is %zu.",
+        (void *)server,
+        current_count + 1);
 }
 
 static void s_destroy_server(struct aws_event_stream_rpc_server_listener *server) {
     if (server) {
+        AWS_LOGF_INFO(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying server", (void *)server);
         /* the memory for this is cleaned up in the listener shutdown complete callback. */
         aws_server_bootstrap_destroy_socket_listener(server->bootstrap, server->listener);
     }
@@ -364,6 +448,8 @@ void aws_event_stream_rpc_server_listener_release(struct aws_event_stream_rpc_se
     }
 
     size_t ref_count = aws_atomic_fetch_sub_explicit(&server->ref_count, 1, aws_memory_order_seq_cst);
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: server released, new ref count is %zu.", (void *)server, ref_count - 1);
 
     if (ref_count == 1) {
         s_destroy_server(server);
@@ -390,12 +476,27 @@ static void s_on_protocol_message_written_fn(
 
     struct event_stream_connection_send_message_args *message_args = user_data;
 
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: message flushed to channel with error %s",
+        (void *)message_args->connection,
+        aws_error_debug_str(error_code));
+
     if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
-        aws_atomic_store_int(&message_args->connection->handshake_complete, 2);
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: connect ack message sent, the connect handshake is completed",
+            (void *)message_args->connection);
+        aws_atomic_store_int(&message_args->connection->handshake_complete, 2u);
     }
 
     if (message_args->end_stream) {
         AWS_FATAL_ASSERT(message_args->continuation && "end stream flag was set but it wasn't on a continuation");
+        AWS_LOGF_DEBUG(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: end_stream flag for continuation %p was set, closing",
+            (void *)message_args->connection,
+            (void *)message_args->continuation);
         aws_atomic_store_int(&message_args->continuation->is_closed, 1U);
         aws_hash_table_remove(
             &message_args->connection->continuation_table, &message_args->continuation->stream_id, NULL, NULL);
@@ -404,6 +505,10 @@ static void s_on_protocol_message_written_fn(
     message_args->flush_fn(error_code, message_args->user_data);
 
     if (message_args->terminate_connection) {
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: terminate connection flag was set. closing",
+            (void *)message_args->connection);
         aws_event_stream_rpc_server_connection_close(message_args->connection, AWS_ERROR_SUCCESS);
     }
 
@@ -426,11 +531,19 @@ static int s_send_protocol_message(
     void *user_data) {
 
     size_t connect_handshake_completion = aws_atomic_load_int(&connection->handshake_complete);
-
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: connect handshake state %zu",
+        (void *)connection,
+        connect_handshake_completion);
     /* handshake step 1 is a connect message being received. Handshake 2 is the connect ack being sent.
      * no messages other than connect and connect ack are allowed until this count reaches 2. */
     if (connect_handshake_completion != 2 &&
         message_args->message_type < AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
+        AWS_LOGF_TRACE(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: invalid state, a message was received prior to connect handshake completion",
+            (void *)connection);
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
     }
 
@@ -438,6 +551,11 @@ static int s_send_protocol_message(
         aws_mem_calloc(connection->allocator, 1, sizeof(struct event_stream_connection_send_message_args));
 
     if (!message_args) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: allocation of callback args failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         return AWS_OP_ERR;
     }
 
@@ -452,12 +570,20 @@ static int s_send_protocol_message(
         aws_event_stream_rpc_server_continuation_acquire(continuation);
 
         if (message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
+            AWS_LOGF_DEBUG(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: continuation with terminate stream flag was specified closing",
+                (void *)continuation);
             args->end_stream = true;
         }
     }
 
     if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK &&
         !(message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED)) {
+        AWS_LOGF_DEBUG(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: connection ack was rejected closing connection",
+            (void *)connection);
         args->terminate_connection = true;
     }
 
@@ -469,6 +595,11 @@ static int s_send_protocol_message(
 
     if (aws_array_list_init_dynamic(
             &headers_list, connection->allocator, headers_count, sizeof(struct aws_event_stream_header_value_pair))) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: allocation of headers failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto args_allocated_before_failure;
     }
 
@@ -499,6 +630,11 @@ static int s_send_protocol_message(
     aws_array_list_clean_up(&headers_list);
 
     if (message_init_err_code) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: initialization of message failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto args_allocated_before_failure;
     }
 
@@ -506,6 +642,11 @@ static int s_send_protocol_message(
 
     if (aws_event_stream_channel_handler_write_message(
             connection->event_stream_handler, &args->message, s_on_protocol_message_written_fn, args)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: message send failed with error %s",
+            (void *)connection,
+            aws_error_debug_str(aws_last_error()));
         goto message_initialized_before_failure;
     }
 
@@ -548,6 +689,11 @@ void aws_event_stream_rpc_server_connection_close(
     int shutdown_error_code) {
 
     if (!aws_event_stream_rpc_server_connection_is_closed(connection)) {
+        AWS_LOGF_DEBUG(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: closing connection with error %s",
+            (void *)connection,
+            aws_error_debug_str(shutdown_error_code));
         aws_atomic_store_int(&connection->is_closed, 1U);
         aws_channel_shutdown(connection->channel, shutdown_error_code);
 
@@ -569,14 +715,26 @@ bool aws_event_stream_rpc_server_connection_is_closed(struct aws_event_stream_rp
 
 void aws_event_stream_rpc_server_continuation_acquire(
     struct aws_event_stream_rpc_server_continuation_token *continuation) {
-    aws_atomic_fetch_add_explicit(&continuation->ref_count, 1, aws_memory_order_relaxed);
+    size_t current_count = aws_atomic_fetch_add_explicit(&continuation->ref_count, 1, aws_memory_order_relaxed);
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: continuation acquired, new ref count is %zu.",
+        (void *)continuation,
+        current_count + 1);
 }
 
 void aws_event_stream_rpc_server_continuation_release(
     struct aws_event_stream_rpc_server_continuation_token *continuation) {
     size_t value = aws_atomic_fetch_sub_explicit(&continuation->ref_count, 1, aws_memory_order_seq_cst);
 
+    AWS_LOGF_TRACE(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: continuation released, new ref count is %zu.",
+        (void *)continuation,
+        value - 1);
+
     if (value == 1) {
+        AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying continuation.", (void *)continuation);
         struct aws_allocator *allocator = continuation->connection->allocator;
         aws_event_stream_rpc_server_connection_release(continuation->connection);
         aws_mem_release(allocator, continuation);
@@ -612,6 +770,12 @@ static void s_send_connection_level_error(
     uint32_t message_flags,
     const struct aws_byte_cursor *message) {
     struct aws_byte_buf payload_buf = aws_byte_buf_from_array(message->ptr, message->len);
+
+    AWS_LOGF_DEBUG(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: sending connection-level error\n" PRInSTR,
+        (void *)connection,
+        AWS_BYTE_BUF_PRI(payload_buf));
 
     struct aws_event_stream_header_value_pair content_type_header =
         aws_event_stream_create_string_header(s_json_content_type_name, s_json_content_type_value);
@@ -657,6 +821,11 @@ static void s_route_message_by_type(
 
     /* make sure if this is not a CONNECT message being received, the handshake has been completed. */
     if (handshake_complete < 2 && message_type != AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: a message was received on this connection prior to the "
+            "connect handshake completing",
+            (void *)connection);
         aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
         s_send_connection_level_error(
             connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_connect_not_completed_error);
@@ -665,8 +834,15 @@ static void s_route_message_by_type(
 
     /* stream_id being non zero ALWAYS indicates APPLICATION_DATA or APPLICATION_ERROR. */
     if (stream_id > 0) {
+        AWS_LOGF_TRACE(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: stream id %" PRIu32, (void *)connection, stream_id);
+
         struct aws_event_stream_rpc_server_continuation_token *continuation = NULL;
         if (message_type > AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: only application messages can be sent on a stream id, "
+                "but this message is the incorrect type",
+                (void *)connection);
             aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_stream_id_error);
@@ -675,6 +851,10 @@ static void s_route_message_by_type(
 
         /* INT32_MAX is the max stream id. */
         if (stream_id > INT32_MAX) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: stream_id is larger than the max acceptable value",
+                (void *)connection);
             aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_stream_id_error);
@@ -684,9 +864,18 @@ static void s_route_message_by_type(
         /* if the stream is is in the past, look it up from the continuation table. If it's not there, that's an error.
          * if it is, find it and notify the user a message arrived */
         if (stream_id <= connection->latest_stream_id) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: stream_id is an already seen stream_id, looking for existing continuation",
+                (void *)connection);
+
             struct aws_hash_element *continuation_element = NULL;
             if (aws_hash_table_find(&connection->continuation_table, &stream_id, &continuation_element) ||
                 !continuation_element) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_SERVER,
+                    "id=%p: stream_id does not have a corresponding continuation",
+                    (void *)connection);
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_client_stream_id_error);
@@ -694,13 +883,28 @@ static void s_route_message_by_type(
             }
 
             continuation = continuation_element->value;
+            AWS_LOGF_TRACE(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: stream_id corresponds to continuation %p",
+                (void *)connection,
+                (void *)continuation);
+
             aws_event_stream_rpc_server_continuation_acquire(continuation);
             continuation->continuation_fn(continuation, &message_args, continuation->user_data);
             aws_event_stream_rpc_server_continuation_release(continuation);
             /* now these are potentially new streams. Make sure they're in bounds, create a new continuation
              * and notify the user the stream has been created, then send them the message. */
         } else {
+            AWS_LOGF_TRACE(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: stream_id is unknown, attempting to create a continuation for it",
+                (void *)connection);
             if (stream_id != connection->latest_stream_id + 1) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_SERVER,
+                    "id=%p: stream_id is invalid because it's not sequentially increasing",
+                    (void *)connection);
+
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
                 s_send_connection_level_error(
                     connection,
@@ -712,19 +916,38 @@ static void s_route_message_by_type(
 
             /* new streams must always have an operation name. */
             if (operation_name.len == 0) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_SERVER,
+                    "id=%p: new stream_id encountered, but an operation name was not received",
+                    (void *)connection);
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_missing_operation_name_error);
                 return;
             }
 
+            AWS_LOGF_DEBUG(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: stream_id is a valid new stream. Creating continuation",
+                (void *)connection);
             continuation =
                 aws_mem_calloc(connection->allocator, 1, sizeof(struct aws_event_stream_rpc_server_continuation_token));
             if (!continuation) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_SERVER,
+                    "id=%p: continuation allocation failed with error %s",
+                    (void *)connection,
+                    aws_error_debug_str(aws_last_error()));
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
                 return;
             }
+
+            AWS_LOGF_DEBUG(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: new continuation is %p",
+                (void *)connection,
+                (void *)continuation);
 
             continuation->stream_id = stream_id;
             continuation->connection = connection;
@@ -732,6 +955,11 @@ static void s_route_message_by_type(
             aws_atomic_init_int(&continuation->ref_count, 1);
 
             if (aws_hash_table_put(&connection->continuation_table, &continuation->stream_id, continuation, NULL)) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_SERVER,
+                    "id=%p: continuation table update failed with error %s",
+                    (void *)connection,
+                    aws_error_debug_str(aws_last_error()));
                 /* continuation release will drop the connection reference as well */
                 aws_event_stream_rpc_server_continuation_release(continuation);
                 s_send_connection_level_error(
@@ -743,6 +971,8 @@ static void s_route_message_by_type(
             AWS_ZERO_STRUCT(options);
 
             aws_event_stream_rpc_server_continuation_acquire(continuation);
+            AWS_LOGF_TRACE(
+                AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: invoking on_incoming_stream callback", (void *)connection);
             if (connection->on_incoming_stream(
                     continuation->connection, continuation, operation_name, &options, connection->user_data)) {
                 aws_event_stream_rpc_server_continuation_release(continuation);
@@ -764,12 +994,22 @@ static void s_route_message_by_type(
 
         /* if it was a terminal stream message purge it from the hash table. The delete will decref the continuation. */
         if (message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
+            AWS_LOGF_DEBUG(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: the terminate_stream flag was received for continuation %p, closing",
+                (void *)connection,
+                (void *)continuation);
             aws_atomic_store_int(&continuation->is_closed, 1U);
             aws_hash_table_remove(&connection->continuation_table, &stream_id, NULL, NULL);
         }
     } else {
         if (message_type <= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR ||
             message_type >= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_COUNT) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: a zero stream id was received with an invalid message-type %" PRIu32,
+                (void *)connection,
+                message_type);
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_message_type_error);
             return;
@@ -777,12 +1017,20 @@ static void s_route_message_by_type(
 
         if (message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
             if (handshake_complete) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_SERVER,
+                    "id=%p: connect received but the handshake is already completed. Only one is allowed.",
+                    (void *)connection);
                 /* only one connect is allowed. This would be a duplicate. */
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_connect_not_completed_error);
                 return;
             }
             aws_atomic_store_int(&connection->handshake_complete, 1U);
+            AWS_LOGF_INFO(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: connect received, connection handshake completion pending the server sending an ack.",
+                (void *)connection);
         }
 
         connection->on_connection_protocol_message(connection, &message_args, connection->user_data);
@@ -794,16 +1042,31 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
 
     if (!error_code) {
         struct aws_event_stream_rpc_server_connection *connection = user_data;
+        AWS_LOGF_TRACE(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: message received on connection of length %" PRIu32,
+            (void *)connection,
+            aws_event_stream_message_total_length(message));
 
         struct aws_array_list headers;
         if (aws_array_list_init_dynamic(
                 &headers, connection->allocator, 8, sizeof(struct aws_event_stream_header_value_pair))) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: error initializing headers %s",
+                (void *)connection,
+                aws_error_debug_str(aws_last_error()));
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
             return;
         }
 
         if (aws_event_stream_message_headers(message, &headers)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: error fetching headers %s",
+                (void *)connection,
+                aws_error_debug_str(aws_last_error()));
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
             goto clean_up;
@@ -817,10 +1080,17 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
         AWS_ZERO_STRUCT(operation_name_buf);
         if (aws_event_stream_rpc_fetch_message_metadata(
                 &headers, &stream_id, &message_type, &message_flags, &operation_name_buf)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "id=%p: invalid protocol message with error %s",
+                (void *)connection,
+                aws_error_debug_str(aws_last_error()));
             s_send_connection_level_error(
                 connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_message_error);
             goto clean_up;
         }
+
+        AWS_LOGF_TRACE(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: routing message", (void *)connection);
 
         s_route_message_by_type(
             connection,

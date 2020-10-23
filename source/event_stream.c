@@ -69,11 +69,36 @@ static struct aws_error_info_list s_list = {
 
 static bool s_event_stream_library_initialized = false;
 
+static struct aws_log_subject_info s_event_stream_log_subject_infos[] = {
+    DEFINE_LOG_SUBJECT_INFO(
+        AWS_LS_EVENT_STREAM_GENERAL,
+        "event-stream-general",
+        "Subject for aws-c-event-stream logging that defies categorization."),
+    DEFINE_LOG_SUBJECT_INFO(
+        AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
+        "event-stream-channel-handler",
+        "Subject for event-stream channel handler related logging."),
+    DEFINE_LOG_SUBJECT_INFO(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "event-stream-rpc-server",
+        "Subject for event-stream rpc server."),
+    DEFINE_LOG_SUBJECT_INFO(
+        AWS_LS_EVENT_STREAM_RPC_CLIENT,
+        "event-stream-rpc-client",
+        "Subject for event-stream rpc client."),
+};
+
+static struct aws_log_subject_info_list s_event_stream_log_subject_list = {
+    .subject_list = s_event_stream_log_subject_infos,
+    .count = AWS_ARRAY_SIZE(s_event_stream_log_subject_infos),
+};
+
 void aws_event_stream_library_init(struct aws_allocator *allocator) {
     if (!s_event_stream_library_initialized) {
         s_event_stream_library_initialized = true;
         aws_io_library_init(allocator);
         aws_register_error_info(&s_list);
+        aws_register_log_subject_info_list(&s_event_stream_log_subject_list);
     }
 }
 
