@@ -17,6 +17,9 @@
 #ifdef _MSC_VER
 /* allow declared initializer using address of automatic variable */
 #    pragma warning(disable : 4221)
+/* allow non-constant aggregate initializers */
+#    pragma warning(disable : 4204)
+
 #endif
 
 struct aws_event_stream_rpc_client_connection {
