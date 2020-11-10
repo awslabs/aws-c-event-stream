@@ -587,7 +587,9 @@ int aws_event_stream_headers_list_init(struct aws_array_list *headers, struct aw
 }
 
 void aws_event_stream_headers_list_cleanup(struct aws_array_list *headers) {
-    AWS_ASSERT(headers);
+    if (AWS_UNLIKELY(!headers || !aws_array_list_is_valid(headers))) {
+        return;
+    }
 
     for (size_t i = 0; i < aws_array_list_length(headers); ++i) {
         struct aws_event_stream_header_value_pair *header = NULL;

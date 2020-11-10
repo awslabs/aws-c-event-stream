@@ -14,15 +14,17 @@ const struct aws_byte_cursor aws_event_stream_rpc_stream_id_name = AWS_BYTE_CUR_
 const struct aws_byte_cursor aws_event_stream_rpc_operation_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("operation");
 
 /* just a convenience function for fetching message metadata from the event stream headers on a single iteration. */
-int aws_event_stream_rpc_fetch_message_metadata(
-    struct aws_array_list *message_headers,
+int aws_event_stream_rpc_extract_message_metadata(
+    const struct aws_array_list *message_headers,
     int32_t *stream_id,
     int32_t *message_type,
     int32_t *message_flags,
     struct aws_byte_buf *operation_name) {
     size_t length = aws_array_list_length(message_headers);
-    size_t required_fields_found = 0;
-    size_t optional_fields_found = 0;
+    bool message_type_found = 0;
+    bool message_flags_found = 0;
+    bool stream_id_found = 0;
+    bool operation_name_found = 0;
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_GENERAL, "processing message headers for rpc protocol. %zu headers to process.", length);
@@ -41,7 +43,7 @@ int aws_event_stream_rpc_fetch_message_metadata(
             if (aws_byte_buf_eq_ignore_case(&name_buf, &stream_id_field)) {
                 *stream_id = aws_event_stream_header_value_as_int32(header);
                 AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_GENERAL, "stream id header value %" PRId32, *stream_id);
-                required_fields_found += 1;
+                stream_id_found += 1;
                 goto found;
             }
 
@@ -50,7 +52,7 @@ int aws_event_stream_rpc_fetch_message_metadata(
             if (aws_byte_buf_eq_ignore_case(&name_buf, &message_type_field)) {
                 *message_type = aws_event_stream_header_value_as_int32(header);
                 AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_GENERAL, "message type header value %" PRId32, *message_type);
-                required_fields_found += 1;
+                message_type_found += 1;
                 goto found;
             }
 
@@ -59,7 +61,7 @@ int aws_event_stream_rpc_fetch_message_metadata(
             if (aws_byte_buf_eq_ignore_case(&name_buf, &message_flags_field)) {
                 *message_flags = aws_event_stream_header_value_as_int32(header);
                 AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_GENERAL, "message flags header value %" PRId32, *message_flags);
-                required_fields_found += 1;
+                message_flags_found += 1;
                 goto found;
             }
         }
@@ -74,7 +76,7 @@ int aws_event_stream_rpc_fetch_message_metadata(
                     AWS_LS_EVENT_STREAM_GENERAL,
                     "operation name header value" PRInSTR,
                     AWS_BYTE_BUF_PRI(*operation_name));
-                optional_fields_found += 1;
+                operation_name_found += 1;
                 goto found;
             }
         }
@@ -82,17 +84,14 @@ int aws_event_stream_rpc_fetch_message_metadata(
         continue;
 
     found:
-        if (required_fields_found == 3 && optional_fields_found == 1) {
+        if (message_flags_found && message_type_found && stream_id_found && operation_name_found) {
             return AWS_OP_SUCCESS;
         }
     }
 
-    AWS_LOGF_TRACE(
-        AWS_LS_EVENT_STREAM_GENERAL,
-        "required fields found %zu, optional fields found %zu.",
-        required_fields_found,
-        optional_fields_found);
-    return required_fields_found == 3 ? AWS_OP_SUCCESS : AWS_OP_ERR;
+    return message_flags_found && message_type_found && stream_id_found
+               ? AWS_OP_SUCCESS
+               : aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
 }
 
 static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;

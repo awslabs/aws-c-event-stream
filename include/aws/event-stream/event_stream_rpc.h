@@ -44,9 +44,12 @@ enum aws_event_stream_rpc_message_flag {
 struct aws_event_stream_rpc_message_args {
     /** array of headers for an event-stream message. */
     struct aws_event_stream_header_value_pair *headers;
-    /** number of headers in the headers array. */
+    /** number of headers in the headers array.
+     * headers are copied in aws_event_stream_rpc_*_send_message()
+     * so you can free the memory immediately after calling it if you need to.*/
     size_t headers_count;
-    /** payload buffer for the message */
+    /** payload buffer for the message, payload is copied in aws_event_stream_rpc_*_send_message()
+     * so you can free the memory immediately after calling it if you need to. */
     struct aws_byte_buf *payload;
     /** message type for the message. This will be added to the headers array
      * and the ":message-type" header should not be included in headers */

@@ -164,7 +164,7 @@ static bool s_event_loop_shutdown_pred(void *arg) {
     return test_data->event_loop_shutdown_completed;
 }
 
-static int s_client_on_connection_setup(
+static void s_client_on_connection_setup(
     struct aws_event_stream_rpc_client_connection *connection,
     int error_code,
     void *user_data) {
@@ -180,8 +180,6 @@ static int s_client_on_connection_setup(
     test_data->client_setup_completed = true;
     aws_mutex_unlock(&test_data->setup_lock);
     aws_condition_variable_notify_one(&test_data->setup_cvar);
-
-    return AWS_OP_SUCCESS;
 }
 
 static void s_client_on_connection_shutdown(

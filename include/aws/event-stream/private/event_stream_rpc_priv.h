@@ -7,8 +7,14 @@
 
 #include <aws/event-stream/event_stream_rpc.h>
 
-int aws_event_stream_rpc_fetch_message_metadata(
-    struct aws_array_list *message_headers,
+enum aws_event_stream_connection_handshake_state {
+    CONNECTION_HANDSHAKE_STATE_INITIALIZED = 0u,
+    CONNECTION_HANDSHAKE_STATE_CONNECT_PROCESSED = 1u,
+    CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED = 2u,
+};
+
+int aws_event_stream_rpc_extract_message_metadata(
+    const struct aws_array_list *message_headers,
     int32_t *stream_id,
     int32_t *message_type,
     int32_t *message_flags,

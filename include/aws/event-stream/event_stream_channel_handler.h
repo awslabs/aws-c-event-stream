@@ -13,8 +13,8 @@ struct aws_channel_handler;
 /**
  * Invoked when an aws_event_stream_message is encountered. If the message
  * parsed successfully, message will be non-null and error_code will be AWS_ERROR_SUCCESS.
- * Otherwiuse message will be null and error_code will represent the error that was encountered.
- * Note that any case that error_code was not AWS_OP_SUCCESS, the channel also shutsdown.
+ * Otherwise message will be null and error_code will represent the error that was encountered.
+ * Note that any case that error_code was not AWS_OP_SUCCESS, the channel also shuts down.
  */
 typedef void(aws_event_stream_channel_handler_on_message_received_fn)(
     struct aws_event_stream_message *message,
@@ -35,6 +35,7 @@ typedef void(aws_event_stream_channel_handler_on_message_written_fn)(
 struct aws_event_stream_channel_handler_options {
     /** Callback for when messages are received. Can not be null. */
     aws_event_stream_channel_handler_on_message_received_fn *on_message_received;
+    /** user data passed to message callback. Optional */
     void *user_data;
     /** initial window size to use for the channel. If automatic window management is set to true, this value is
      * ignored. */

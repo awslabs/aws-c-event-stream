@@ -50,7 +50,11 @@ typedef void(aws_event_stream_rpc_client_on_connection_shutdown_fn)(
     int error_code,
     void *user_data);
 
-typedef int(aws_event_stream_rpc_client_on_connection_setup_fn)(
+/**
+ * Invoked when a connection attempt completes. error_code of 0 indicates success, anything else indicates failure.
+ * If the connection attempt fails, aws_event_stream_rpc_client_on_connection_shutdown_fn will not be invoked. *
+ */
+typedef void(aws_event_stream_rpc_client_on_connection_setup_fn)(
     struct aws_event_stream_rpc_client_connection *connection,
     int error_code,
     void *user_data);
@@ -67,6 +71,7 @@ struct aws_event_stream_rpc_client_connection_options {
     const char *host_name;
     /** port to use for your connection, assuming for the appropriate socket type. */
     uint16_t port;
+    /** socket options for establishing the connection to the RPC server. */
     const struct aws_socket_options *socket_options;
     /** optional: tls options for using when establishing your connection. */
     const struct aws_tls_connection_options *tls_options;
@@ -104,9 +109,9 @@ AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_connection_close(
     int shutdown_error_code);
 
 /**
- * Returns true if the connection is already closed.
+ * Returns true if the connection is open, false otherwise.
  */
-AWS_EVENT_STREAM_API bool aws_event_stream_rpc_client_connection_is_closed(
+AWS_EVENT_STREAM_API bool aws_event_stream_rpc_client_connection_is_open(
     const struct aws_event_stream_rpc_client_connection *connection);
 
 /**

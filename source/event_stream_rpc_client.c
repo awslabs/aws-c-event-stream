@@ -31,8 +31,8 @@ struct aws_event_stream_rpc_client_connection {
     struct aws_channel_handler *event_stream_handler;
     uint32_t latest_stream_id;
     struct aws_mutex stream_lock;
-    struct aws_atomic_var is_closed;
-    struct aws_atomic_var handshake_complete;
+    struct aws_atomic_var is_open;
+    struct aws_atomic_var handshake_state;
     size_t initial_window_size;
     aws_event_stream_rpc_client_on_connection_setup_fn *on_connection_setup;
     aws_event_stream_rpc_client_connection_protocol_message_fn *on_connection_protocol_message;
@@ -170,7 +170,7 @@ static void s_on_channel_shutdown_fn(
         (void *)connection,
         error_code,
         (void *)channel);
-    aws_atomic_store_int(&connection->is_closed, 1u);
+    aws_atomic_store_int(&connection->is_open, 0u);
 
     if (connection->bootstrap_owned) {
         aws_mutex_lock(&connection->stream_lock);
@@ -224,8 +224,8 @@ int aws_event_stream_rpc_client_connection_connect(
     /* this is released in the connection release which gets called regardless of if this function is successful or
      * not*/
     aws_client_bootstrap_acquire(connection->bootstrap_ref);
-    aws_atomic_init_int(&connection->handshake_complete, 0);
-    aws_atomic_init_int(&connection->is_closed, 0);
+    aws_atomic_init_int(&connection->handshake_state, CONNECTION_HANDSHAKE_STATE_INITIALIZED);
+    aws_atomic_init_int(&connection->is_open, 1);
     aws_mutex_init(&connection->stream_lock);
 
     connection->on_connection_shutdown = conn_options->on_connection_shutdown;
@@ -326,8 +326,8 @@ void aws_event_stream_rpc_client_connection_close(
         (void *)connection,
         aws_error_debug_str(shutdown_error_code));
 
-    if (!aws_event_stream_rpc_client_connection_is_closed(connection)) {
-        aws_atomic_store_int(&connection->is_closed, 1U);
+    if (aws_event_stream_rpc_client_connection_is_open(connection)) {
+        aws_atomic_store_int(&connection->is_open, 0U);
         aws_channel_shutdown(connection->channel, shutdown_error_code);
 
         if (!connection->bootstrap_owned) {
@@ -341,8 +341,8 @@ void aws_event_stream_rpc_client_connection_close(
     }
 }
 
-bool aws_event_stream_rpc_client_connection_is_closed(const struct aws_event_stream_rpc_client_connection *connection) {
-    return aws_atomic_load_int(&connection->is_closed) == 1U;
+bool aws_event_stream_rpc_client_connection_is_open(const struct aws_event_stream_rpc_client_connection *connection) {
+    return aws_atomic_load_int(&connection->is_open) == 1U;
 }
 
 struct event_stream_connection_send_message_args {
@@ -375,7 +375,7 @@ static void s_on_protocol_message_written_fn(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: connect message flushed to the wire, waiting on connect ack.",
             (void *)message_args->connection);
-        aws_atomic_store_int(&message_args->connection->handshake_complete, 1);
+        aws_atomic_store_int(&message_args->connection->handshake_state, CONNECTION_HANDSHAKE_STATE_CONNECT_PROCESSED);
     }
 
     if (message_args->end_stream) {
@@ -426,16 +426,17 @@ static int s_send_protocol_message(
         (void *)continuation,
         stream_id);
 
-    size_t connect_handshake_completion = aws_atomic_load_int(&connection->handshake_complete);
+    size_t connect_handshake_state = aws_atomic_load_int(&connection->handshake_state);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: handshake completion value %zu",
         (void *)connection,
-        connect_handshake_completion);
+        connect_handshake_state);
 
     /* handshake step 1 is a connect message being received. Handshake 2 is the connect ack being sent.
      * no messages other than connect and connect ack are allowed until this count reaches 2. */
-    if (connect_handshake_completion != 2 && message_args->message_type < AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
+    if (connect_handshake_state != CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED &&
+        message_args->message_type < AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: handshake not completed, only a connect message can be sent.",
@@ -488,7 +489,7 @@ static int s_send_protocol_message(
 
     if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
         AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: sending connect message", (void *)connection);
-        aws_atomic_store_int(&connection->handshake_complete, 1u);
+        aws_atomic_store_int(&connection->handshake_state, CONNECTION_HANDSHAKE_STATE_CONNECT_PROCESSED);
     }
 
     args->flush_fn = flush_fn;
@@ -586,7 +587,7 @@ int aws_event_stream_rpc_client_connection_send_protocol_message(
     const struct aws_event_stream_rpc_message_args *message_args,
     aws_event_stream_rpc_client_message_flush_fn *flush_fn,
     void *user_data) {
-    if (aws_event_stream_rpc_client_connection_is_closed(connection)) {
+    if (!aws_event_stream_rpc_client_connection_is_open(connection)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_CONNECTION_CLOSED);
     }
 
@@ -650,10 +651,11 @@ static void s_route_message_by_type(
         .message_type = message_type,
     };
 
-    size_t handshake_complete = aws_atomic_load_int(&connection->handshake_complete);
+    size_t handshake_complete = aws_atomic_load_int(&connection->handshake_state);
 
     /* make sure if this is not a CONNECT message being received, the handshake has been completed. */
-    if (handshake_complete < 2 && message_type != AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
+    if (handshake_complete < CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED &&
+        message_type != AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: a message was received on this connection prior to the "
@@ -729,7 +731,7 @@ static void s_route_message_by_type(
         }
 
         if (message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
-            if (handshake_complete != 1u) {
+            if (handshake_complete != CONNECTION_HANDSHAKE_STATE_CONNECT_PROCESSED) {
                 AWS_LOGF_ERROR(
                     AWS_LS_EVENT_STREAM_RPC_CLIENT,
                     "id=%p: connect ack received but the handshake is already completed. Only one is allowed.",
@@ -739,7 +741,7 @@ static void s_route_message_by_type(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_connect_not_completed_error);
                 return;
             }
-            aws_atomic_store_int(&connection->handshake_complete, 2U);
+            aws_atomic_store_int(&connection->handshake_state, CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED);
             AWS_LOGF_INFO(
                 AWS_LS_EVENT_STREAM_RPC_CLIENT,
                 "id=%p: connect ack received, connection handshake completed",
@@ -792,7 +794,7 @@ static void s_on_message_received(struct aws_event_stream_message *message, int 
 
         struct aws_byte_buf operation_name_buf;
         AWS_ZERO_STRUCT(operation_name_buf);
-        if (aws_event_stream_rpc_fetch_message_metadata(
+        if (aws_event_stream_rpc_extract_message_metadata(
                 &headers, &stream_id, &message_type, &message_flags, &operation_name_buf)) {
             AWS_LOGF_ERROR(
                 AWS_LS_EVENT_STREAM_RPC_CLIENT,
@@ -867,7 +869,7 @@ void aws_event_stream_rpc_client_continuation_acquire(
 
 void aws_event_stream_rpc_client_continuation_release(
     const struct aws_event_stream_rpc_client_continuation_token *continuation) {
-    if (!continuation) {
+    if (AWS_UNLIKELY(!continuation)) {
         return;
     }
 

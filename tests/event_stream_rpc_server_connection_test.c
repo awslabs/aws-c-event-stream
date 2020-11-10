@@ -311,7 +311,7 @@ static int s_do_connect(
     ASSERT_TRUE(message_data->message_flushed);
     ASSERT_INT_EQUALS(0, message_data->message_flush_err_code);
 
-    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_byte_buf connect_ack_data;
     ASSERT_SUCCESS(aws_byte_buf_init(&connect_ack_data, allocator, 1024));
@@ -425,7 +425,7 @@ static int s_test_event_stream_rpc_server_connection_connect_reject_flow(struct 
     ASSERT_TRUE(message_data.message_flushed);
     ASSERT_INT_EQUALS(0, message_data.message_flush_err_code);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
     aws_event_stream_rpc_server_connection_close(test_data->connection, AWS_ERROR_SUCCESS);
 
     return AWS_OP_SUCCESS;
@@ -485,7 +485,7 @@ static int s_test_event_stream_rpc_server_connection_messages_before_connect_rec
 
     aws_event_stream_message_clean_up(&message);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_linked_list *message_queue = testing_channel_get_written_message_queue(&test_data->testing_channel);
     ASSERT_FALSE(aws_linked_list_empty(message_queue));
@@ -608,7 +608,7 @@ static int s_test_event_stream_rpc_server_connection_messages_before_connect_ack
 
     aws_event_stream_message_clean_up(&message);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_linked_list *message_queue = testing_channel_get_written_message_queue(&test_data->testing_channel);
     ASSERT_FALSE(aws_linked_list_empty(message_queue));
@@ -693,7 +693,7 @@ static int s_test_event_stream_rpc_server_connection_unknown_message_type(struct
 
     aws_event_stream_message_clean_up(&message);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_linked_list *message_queue = testing_channel_get_written_message_queue(&test_data->testing_channel);
     ASSERT_FALSE(aws_linked_list_empty(message_queue));
@@ -773,7 +773,7 @@ static int s_test_event_stream_rpc_server_connection_missing_message_type(struct
 
     aws_event_stream_message_clean_up(&message);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_linked_list *message_queue = testing_channel_get_written_message_queue(&test_data->testing_channel);
     ASSERT_FALSE(aws_linked_list_empty(message_queue));
@@ -853,7 +853,7 @@ static int s_test_event_stream_rpc_server_connection_missing_message_flags(struc
 
     aws_event_stream_message_clean_up(&message);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_linked_list *message_queue = testing_channel_get_written_message_queue(&test_data->testing_channel);
     ASSERT_FALSE(aws_linked_list_empty(message_queue));
@@ -933,7 +933,7 @@ static int s_test_event_stream_rpc_server_connection_missing_stream_id(struct aw
 
     aws_event_stream_message_clean_up(&message);
 
-    ASSERT_TRUE(aws_event_stream_rpc_server_connection_is_closed(test_data->connection));
+    ASSERT_FALSE(aws_event_stream_rpc_server_connection_is_open(test_data->connection));
 
     struct aws_byte_buf connect_ack_data;
     ASSERT_SUCCESS(aws_byte_buf_init(&connect_ack_data, allocator, 1024));
