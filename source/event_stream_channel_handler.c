@@ -253,8 +253,7 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
 
     struct message_write_data *message_data = arg;
 
-    AWS_LOGF_TRACE(
-        AWS_LS_EVENT_STREAM_CHANNEL_HANDLER, "id=%p: Write message task invoked.", (void *)message_data->handler);
+    AWS_LOGF_TRACE(AWS_LS_EVENT_STREAM_CHANNEL_HANDLER, "static: Write message task invoked.");
     if (status == AWS_TASK_STATUS_RUN_READY) {
         struct aws_event_stream_message *message = message_data->message;
         struct aws_event_stream_channel_handler *handler = message_data->handler;
@@ -266,7 +265,7 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
             AWS_LOGF_TRACE(
                 AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
                 "id=%p: writing message chunk of size %zu.",
-                (void *)message_data->handler,
+                (void *)&handler->handler,
                 message_cur.len);
 
             /* io messages from the pool are allowed to be smaller than the requested size. */
@@ -278,7 +277,7 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
                 AWS_LOGF_ERROR(
                     AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
                     "id=%p: Error occurred while acquiring io message %s.",
-                    (void *)message_data->handler,
+                    (void *)&handler->handler,
                     aws_error_debug_str(error_code));
 
                 message_data->on_message_written(message, error_code, message_data->user_data);
@@ -294,7 +293,7 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
                 AWS_LOGF_TRACE(
                     AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
                     "id=%p: Message completely written to all io buffers.",
-                    (void *)message_data->handler);
+                    (void *)&handler->handler);
                 io_message->on_completion = s_on_message_write_completed_fn;
                 io_message->user_data = message_data;
             }
@@ -307,7 +306,7 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
                 AWS_LOGF_ERROR(
                     AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
                     "id=%p: Error occurred while sending message to channel %s.",
-                    (void *)message_data->handler,
+                    (void *)&handler->handler,
                     aws_error_debug_str(error_code));
                 message_data->on_message_written(message, error_code, message_data->user_data);
                 aws_mem_release(message_data->allocator, message_data);
@@ -315,13 +314,10 @@ static void s_write_handler_message(struct aws_channel_task *task, void *arg, en
                 break;
             }
             AWS_LOGF_TRACE(
-                AWS_LS_EVENT_STREAM_CHANNEL_HANDLER, "id=%p: Message sent to channel", (void *)message_data->handler);
+                AWS_LS_EVENT_STREAM_CHANNEL_HANDLER, "id=%p: Message sent to channel", (void *)&handler->handler);
         }
     } else {
-        AWS_LOGF_WARN(
-            AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
-            "id=%p: Channel was shutdown. Message not sent",
-            (void *)message_data->handler);
+        AWS_LOGF_WARN(AWS_LS_EVENT_STREAM_CHANNEL_HANDLER, "static: Channel was shutdown. Message not sent");
         message_data->on_message_written(
             message_data->message, AWS_ERROR_IO_OPERATION_CANCELLED, message_data->user_data);
         aws_mem_release(message_data->allocator, message_data);
