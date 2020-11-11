@@ -30,7 +30,6 @@ include(CheckCCompilerFlag)
 include(AwsFindPackage)
 include(AwsCheckHeaders)
 
-
 if(NOT MSVC)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -73,6 +72,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 
+aws_use_package(aws-c-io)
 aws_use_package(aws-c-common)
 aws_use_package(aws-checksums)
 
