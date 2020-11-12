@@ -16,7 +16,6 @@
 #include <aws/event-stream/event_stream_channel_handler.h>
 #include <aws/event-stream/event_stream_rpc_server.h>
 #include <aws/event-stream/private/event_stream_rpc_priv.h>
-#include <aws/event-stream/private/event_stream_rpc_test_helper.h>
 
 #include <aws/common/atomics.h>
 #include <aws/common/hash_table.h>
@@ -681,7 +680,7 @@ void *aws_event_stream_rpc_server_connection_get_user_data(struct aws_event_stre
     return connection->user_data;
 }
 
-void aws_event_stream_rpc_server_override_last_stream_id(
+AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_override_last_stream_id(
     struct aws_event_stream_rpc_server_connection *connection,
     int32_t value) {
     connection->latest_stream_id = value;
