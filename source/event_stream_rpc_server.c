@@ -16,6 +16,7 @@
 #include <aws/event-stream/event_stream_channel_handler.h>
 #include <aws/event-stream/event_stream_rpc_server.h>
 #include <aws/event-stream/private/event_stream_rpc_priv.h>
+#include <aws/event-stream/private/event_stream_rpc_test_helper.h>
 
 #include <aws/common/atomics.h>
 #include <aws/common/hash_table.h>
