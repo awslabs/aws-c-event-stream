@@ -22,9 +22,7 @@
 
 #endif
 
-static void s_complete_continuation(struct aws_event_stream_rpc_client_continuation_token *token);
-static int s_complete_and_clear_each_continuation(void *context, struct aws_hash_element *p_element);
-static int s_mark_each_continuation_closed(void *context, struct aws_hash_element *p_element);
+static void s_clear_continuation_table(struct aws_event_stream_rpc_client_connection *connection);
 
 struct aws_event_stream_rpc_client_connection {
     struct aws_allocator *allocator;
@@ -177,12 +175,7 @@ static void s_on_channel_shutdown_fn(
     aws_atomic_store_int(&connection->is_open, 0u);
 
     if (connection->bootstrap_owned) {
-        aws_mutex_lock(&connection->stream_lock);
-        aws_hash_table_foreach(&connection->continuation_table, s_mark_each_continuation_closed, NULL);
-        aws_mutex_unlock(&connection->stream_lock);
-
-        /* Lock must NOT be held while invoking callbacks. */
-        aws_hash_table_foreach(&connection->continuation_table, s_complete_and_clear_each_continuation, NULL);
+        s_clear_continuation_table(connection);
 
         aws_event_stream_rpc_client_connection_acquire(connection);
         connection->on_connection_shutdown(connection, error_code, connection->user_data);
@@ -221,9 +214,6 @@ static void s_complete_continuation(struct aws_event_stream_rpc_client_continuat
     aws_event_stream_rpc_client_continuation_release(token);
 }
 
-/* Remove each continuation from hash-table and invoke its on_closed() callback.
- * A lock must NOT be held while calling this.
- * For use with aws_hash_table_foreach(). */
 static int s_complete_and_clear_each_continuation(void *context, struct aws_hash_element *p_element) {
     (void)context;
     struct aws_event_stream_rpc_client_continuation_token *continuation = p_element->value;
@@ -231,6 +221,25 @@ static int s_complete_and_clear_each_continuation(void *context, struct aws_hash
     s_complete_continuation(continuation);
 
     return AWS_COMMON_HASH_TABLE_ITER_DELETE | AWS_COMMON_HASH_TABLE_ITER_CONTINUE;
+}
+
+/* Remove each continuation from hash-table and invoke its on_closed() callback.
+ * The connection->is_open must be set false before calling this. */
+static void s_clear_continuation_table(struct aws_event_stream_rpc_client_connection *connection) {
+    AWS_ASSERT(!aws_event_stream_rpc_client_connection_is_open(connection));
+
+    /* Use lock to ensure synchronization with code that adds entries to table.
+     * Since connection was just marked closed, no further entries will be
+     * added to table once we acquire the lock. */
+    aws_mutex_lock(&connection->stream_lock);
+    aws_hash_table_foreach(&connection->continuation_table, s_mark_each_continuation_closed, NULL);
+    aws_mutex_unlock(&connection->stream_lock);
+
+    /* Now release lock before invoking callbacks.
+     * It's safe to alter the table now without a lock, since no further
+     * entries can be added, and we've gone through the critical section
+     * above to ensure synchronization */
+    aws_hash_table_foreach(&connection->continuation_table, s_complete_and_clear_each_continuation, NULL);
 }
 
 int aws_event_stream_rpc_client_connection_connect(
@@ -364,12 +373,7 @@ void aws_event_stream_rpc_client_connection_close(
         aws_channel_shutdown(connection->channel, shutdown_error_code);
 
         if (!connection->bootstrap_owned) {
-            aws_mutex_lock(&connection->stream_lock);
-            aws_hash_table_foreach(&connection->continuation_table, s_mark_each_continuation_closed, NULL);
-            aws_mutex_unlock(&connection->stream_lock);
-
-            /* Lock must NOT be held while invoking callbacks. */
-            aws_hash_table_foreach(&connection->continuation_table, s_complete_and_clear_each_continuation, NULL);
+            s_clear_continuation_table(connection);
 
             aws_event_stream_rpc_client_connection_release(connection);
         }
