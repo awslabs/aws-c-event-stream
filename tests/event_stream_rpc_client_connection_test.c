@@ -254,8 +254,13 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .shutdown_callback_user_data = test_data,
     };
 
-    test_data->resolver =
-        aws_host_resolver_new_default(allocator, 1, test_data->el_group, &host_resolver_shutdown_options);
+    struct aws_host_resolver_default_options resolver_options = {
+        .el_group = test_data->el_group,
+        .max_entries = 1,
+        .shutdown_options = &host_resolver_shutdown_options,
+    };
+
+    test_data->resolver = aws_host_resolver_new_default(allocator, &resolver_options);
     ASSERT_NOT_NULL(test_data->resolver);
 
     struct aws_client_bootstrap_options client_bootstrap_options = {
