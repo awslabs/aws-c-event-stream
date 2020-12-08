@@ -281,7 +281,7 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     };
 
     /* Find a random open port */
-    uint16_t test_port;
+    uint16_t test_port = 0;
     while (!test_data->listener) {
         aws_device_random_u16(&test_port);
         test_port |= 0x8000; /* Use high numbers */
