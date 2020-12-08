@@ -4,6 +4,7 @@
  */
 
 #include <aws/common/condition_variable.h>
+#include <aws/common/device_random.h>
 #include <aws/common/macros.h>
 #include <aws/common/mutex.h>
 #include <aws/event-stream/private/event_stream_rpc_test_helper.h>
@@ -138,19 +139,28 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .type = AWS_SOCKET_STREAM,
     };
 
-    struct aws_event_stream_rpc_server_listener_options listener_options = {
-        .socket_options = &socket_options,
-        .host_name = "127.0.0.1",
-        .port = 30123,
-        .bootstrap = test_data->server_bootstrap,
-        .user_data = test_data,
-        .on_new_connection = s_fixture_on_new_server_connection,
-        .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
-        .on_destroy_callback = s_on_listener_destroy,
-    };
+    /* Find a random open port */
+    uint16_t test_port;
+    while (!test_data->listener) {
+        aws_device_random_u16(&test_port);
+        test_port |= 0x8000; /* Use high numbers */
 
-    test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
-    ASSERT_NOT_NULL(test_data->listener);
+        struct aws_event_stream_rpc_server_listener_options listener_options = {
+            .socket_options = &socket_options,
+            .host_name = "127.0.0.1",
+            .port = test_port,
+            .bootstrap = test_data->server_bootstrap,
+            .user_data = test_data,
+            .on_new_connection = s_fixture_on_new_server_connection,
+            .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
+            .on_destroy_callback = s_on_listener_destroy,
+        };
+
+        test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
+        if (!test_data->listener) {
+            ASSERT_INT_EQUALS(AWS_IO_SOCKET_ADDRESS_IN_USE, aws_last_error());
+        }
+    }
 
     test_data->allocator = allocator;
 

@@ -22,6 +22,10 @@
 
 #endif
 
+static void s_complete_continuation(struct aws_event_stream_rpc_client_continuation_token *token);
+static int s_complete_and_clear_each_continuation(void *context, struct aws_hash_element *p_element);
+static int s_mark_each_continuation_closed(void *context, struct aws_hash_element *p_element);
+
 struct aws_event_stream_rpc_client_connection {
     struct aws_allocator *allocator;
     struct aws_hash_table continuation_table;
@@ -174,8 +178,12 @@ static void s_on_channel_shutdown_fn(
 
     if (connection->bootstrap_owned) {
         aws_mutex_lock(&connection->stream_lock);
-        aws_hash_table_clear(&connection->continuation_table);
+        aws_hash_table_foreach(&connection->continuation_table, s_mark_each_continuation_closed, NULL);
         aws_mutex_unlock(&connection->stream_lock);
+
+        /* Lock must NOT be held while invoking callbacks. */
+        aws_hash_table_foreach(&connection->continuation_table, s_complete_and_clear_each_continuation, NULL);
+
         aws_event_stream_rpc_client_connection_acquire(connection);
         connection->on_connection_shutdown(connection, error_code, connection->user_data);
         aws_event_stream_rpc_client_connection_release(connection);
@@ -185,8 +193,21 @@ static void s_on_channel_shutdown_fn(
     aws_event_stream_rpc_client_connection_release(connection);
 }
 
-static void s_continuation_destroy(void *value) {
-    struct aws_event_stream_rpc_client_continuation_token *token = value;
+/* Set each continuation's is_closed=true.
+ * A lock MUST be held while calling this.
+ * For use with aws_hash_table_foreach(). */
+static int s_mark_each_continuation_closed(void *context, struct aws_hash_element *p_element) {
+    (void)context;
+    struct aws_event_stream_rpc_client_continuation_token *continuation = p_element->value;
+
+    aws_atomic_store_int(&continuation->is_closed, 1U);
+
+    return AWS_COMMON_HASH_TABLE_ITER_CONTINUE;
+}
+
+/* Invoke continuation's on_closed() callback.
+ * A lock must NOT be hold while calling this */
+static void s_complete_continuation(struct aws_event_stream_rpc_client_continuation_token *token) {
     AWS_LOGF_DEBUG(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "token=%p: token with stream-id %" PRIu32 ", purged from the stream table",
@@ -198,6 +219,18 @@ static void s_continuation_destroy(void *value) {
     }
 
     aws_event_stream_rpc_client_continuation_release(token);
+}
+
+/* Remove each continuation from hash-table and invoke its on_closed() callback.
+ * A lock must NOT be held while calling this.
+ * For use with aws_hash_table_foreach(). */
+static int s_complete_and_clear_each_continuation(void *context, struct aws_hash_element *p_element) {
+    (void)context;
+    struct aws_event_stream_rpc_client_continuation_token *continuation = p_element->value;
+
+    s_complete_continuation(continuation);
+
+    return AWS_COMMON_HASH_TABLE_ITER_DELETE | AWS_COMMON_HASH_TABLE_ITER_CONTINUE;
 }
 
 int aws_event_stream_rpc_client_connection_connect(
@@ -240,7 +273,7 @@ int aws_event_stream_rpc_client_connection_connect(
             aws_event_stream_rpc_hash_streamid,
             aws_event_stream_rpc_streamid_eq,
             NULL,
-            s_continuation_destroy)) {
+            NULL)) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: failed initializing continuation table with error %s.",
@@ -326,14 +359,18 @@ void aws_event_stream_rpc_client_connection_close(
         (void *)connection,
         aws_error_debug_str(shutdown_error_code));
 
-    if (aws_event_stream_rpc_client_connection_is_open(connection)) {
-        aws_atomic_store_int(&connection->is_open, 0U);
+    size_t expect_open = 1U;
+    if (aws_atomic_compare_exchange_int(&connection->is_open, &expect_open, 0U)) {
         aws_channel_shutdown(connection->channel, shutdown_error_code);
 
         if (!connection->bootstrap_owned) {
             aws_mutex_lock(&connection->stream_lock);
-            aws_hash_table_clear(&connection->continuation_table);
+            aws_hash_table_foreach(&connection->continuation_table, s_mark_each_continuation_closed, NULL);
             aws_mutex_unlock(&connection->stream_lock);
+
+            /* Lock must NOT be held while invoking callbacks. */
+            aws_hash_table_foreach(&connection->continuation_table, s_complete_and_clear_each_continuation, NULL);
+
             aws_event_stream_rpc_client_connection_release(connection);
         }
     } else {
@@ -386,8 +423,14 @@ static void s_on_protocol_message_written_fn(
             (void *)message_args->continuation);
         AWS_FATAL_ASSERT(message_args->continuation && "end stream flag was set but it wasn't on a continuation");
         aws_atomic_store_int(&message_args->continuation->is_closed, 1U);
+
+        aws_mutex_lock(&message_args->connection->stream_lock);
         aws_hash_table_remove(
             &message_args->connection->continuation_table, &message_args->continuation->stream_id, NULL, NULL);
+        aws_mutex_unlock(&message_args->connection->stream_lock);
+
+        /* Lock must NOT be held while invoking callback */
+        s_complete_continuation(message_args->continuation);
     }
 
     message_args->flush_fn(error_code, message_args->user_data);
@@ -716,6 +759,9 @@ static void s_route_message_by_type(
             aws_mutex_lock(&connection->stream_lock);
             aws_hash_table_remove(&connection->continuation_table, &stream_id, NULL, NULL);
             aws_mutex_unlock(&connection->stream_lock);
+
+            /* Note that we do not invoke callback while holding lock */
+            s_complete_continuation(continuation);
         }
     } else {
         if (message_type <= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR ||
@@ -908,7 +954,16 @@ int aws_event_stream_rpc_client_continuation_activate(
     aws_mutex_lock(&continuation->connection->stream_lock);
 
     if (continuation->stream_id) {
+        AWS_LOGF_ERROR(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: stream has already been activated", (void *)continuation)
         aws_raise_error(AWS_ERROR_INVALID_STATE);
+        goto clean_up;
+    }
+
+    /* Even though is_open is atomic, we need to hold a lock while checking it.
+     * This lets us coordinate with code that sets is_open to false. */
+    if (!aws_event_stream_rpc_client_connection_is_open(continuation->connection)) {
+        AWS_LOGF_ERROR(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: stream's connection is not open", (void *)continuation)
+        aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_CONNECTION_CLOSED);
         goto clean_up;
     }
 
@@ -933,9 +988,6 @@ int aws_event_stream_rpc_client_continuation_activate(
         goto clean_up;
     }
 
-    /* The continuation table gets a ref count on the continuation. Take it here. */
-    aws_event_stream_rpc_client_continuation_acquire(continuation);
-
     if (s_send_protocol_message(
             continuation->connection,
             continuation,
@@ -953,6 +1005,9 @@ int aws_event_stream_rpc_client_continuation_activate(
             aws_error_debug_str(aws_last_error()));
         goto clean_up;
     }
+
+    /* The continuation table gets a ref count on the continuation. Take it here. */
+    aws_event_stream_rpc_client_continuation_acquire(continuation);
 
     continuation->connection->latest_stream_id = continuation->stream_id;
     ret_val = AWS_OP_SUCCESS;
