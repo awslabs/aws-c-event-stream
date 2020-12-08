@@ -7,6 +7,7 @@
 #include <aws/event-stream/private/event_stream_rpc_test_helper.h>
 
 #include <aws/common/condition_variable.h>
+#include <aws/common/device_random.h>
 #include <aws/common/macros.h>
 #include <aws/common/mutex.h>
 #include <aws/io/channel_bootstrap.h>
@@ -16,7 +17,6 @@
 #include <aws/testing/aws_test_harness.h>
 
 static const char *s_test_host_name = "127.0.0.1";
-static const uint16_t s_test_port = 30123;
 
 struct test_data {
     struct aws_allocator *allocator;
@@ -244,7 +244,7 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .shutdown_callback_fn = s_event_loop_shutdown_callback,
         .shutdown_callback_user_data = test_data,
     };
-    test_data->el_group = aws_event_loop_group_new_default(allocator, 0, &el_shutdown_options);
+    test_data->el_group = aws_event_loop_group_new_default(allocator, 1, &el_shutdown_options);
     ASSERT_NOT_NULL(test_data->el_group);
     test_data->server_bootstrap = aws_server_bootstrap_new(allocator, test_data->el_group);
     ASSERT_NOT_NULL(test_data->server_bootstrap);
@@ -254,8 +254,13 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .shutdown_callback_user_data = test_data,
     };
 
-    test_data->resolver =
-        aws_host_resolver_new_default(allocator, 1, test_data->el_group, &host_resolver_shutdown_options);
+    struct aws_host_resolver_default_options resolver_options = {
+        .el_group = test_data->el_group,
+        .max_entries = 1,
+        .shutdown_options = &host_resolver_shutdown_options,
+    };
+
+    test_data->resolver = aws_host_resolver_new_default(allocator, &resolver_options);
     ASSERT_NOT_NULL(test_data->resolver);
 
     struct aws_client_bootstrap_options client_bootstrap_options = {
@@ -275,19 +280,28 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .type = AWS_SOCKET_STREAM,
     };
 
-    struct aws_event_stream_rpc_server_listener_options listener_options = {
-        .socket_options = &socket_options,
-        .host_name = s_test_host_name,
-        .port = s_test_port,
-        .bootstrap = test_data->server_bootstrap,
-        .user_data = test_data,
-        .on_new_connection = s_fixture_on_new_server_connection,
-        .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
-        .on_destroy_callback = s_on_listener_destroy,
-    };
+    /* Find a random open port */
+    uint16_t test_port = 0;
+    while (!test_data->listener) {
+        aws_device_random_u16(&test_port);
+        test_port |= 0x8000; /* Use high numbers */
 
-    test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
-    ASSERT_NOT_NULL(test_data->listener);
+        struct aws_event_stream_rpc_server_listener_options listener_options = {
+            .socket_options = &socket_options,
+            .host_name = s_test_host_name,
+            .port = test_port,
+            .bootstrap = test_data->server_bootstrap,
+            .user_data = test_data,
+            .on_new_connection = s_fixture_on_new_server_connection,
+            .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
+            .on_destroy_callback = s_on_listener_destroy,
+        };
+
+        test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
+        if (!test_data->listener) {
+            ASSERT_INT_EQUALS(AWS_IO_SOCKET_ADDRESS_IN_USE, aws_last_error());
+        }
+    }
 
     test_data->allocator = allocator;
 
@@ -296,7 +310,7 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
         .user_data = test_data,
         .bootstrap = test_data->client_bootstrap,
         .host_name = s_test_host_name,
-        .port = s_test_port,
+        .port = test_port,
         .on_connection_setup = s_client_on_connection_setup,
         .on_connection_shutdown = s_client_on_connection_shutdown,
         .on_connection_protocol_message = s_client_connection_protocol_message,
