@@ -412,7 +412,7 @@ static void s_on_protocol_message_written_fn(
         (void *)message);
 
     if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT) {
-        AWS_LOGF_DEBUG(
+        AWS_LOGF_TRACE(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: connect message flushed to the wire.",
             (void *)message_args->connection);
