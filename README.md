@@ -34,7 +34,7 @@ cmake -S aws-c-common -B aws-c-common/build -DCMAKE_INSTALL_PREFIX=<install-path
 cmake --build aws-c-common/build --target install
 
 git clone git@github.com:awslabs/aws-checksums.git
-cmake -S aws-checksums -B aws-checksums/build --DCMAKE_INSTALL_PREFIX=<install-path> DCMAKE_PREFIX_PATH=<install-path>
+cmake -S aws-checksums -B aws-checksums/build -DCMAKE_INSTALL_PREFIX=<install-path> -DCMAKE_PREFIX_PATH=<install-path>
 cmake --build aws-checksums/build --target install
 
 git clone git@github.com:awslabs/aws-c-cal.git
@@ -42,10 +42,10 @@ cmake -S aws-c-cal -B aws-c-cal/build -DCMAKE_INSTALL_PREFIX=<install-path> -DCM
 cmake --build aws-c-cal/build --target install
 
 git clone git@github.com:awslabs/aws-c-io.git
-cmake -S aws-c-io -B aws-c-io/build --DCMAKE_INSTALL_PREFIX=<install-path> DCMAKE_PREFIX_PATH=<install-path>
+cmake -S aws-c-io -B aws-c-io/build -DCMAKE_INSTALL_PREFIX=<install-path> -DCMAKE_PREFIX_PATH=<install-path>
 cmake --build aws-c-io/build --target install
 
 git clone git@github.com:awslabs/aws-c-event-stream.git
-cmake -S aws-c-event-stream -B aws-c-event-stream/build --DCMAKE_INSTALL_PREFIX=<install-path> DCMAKE_PREFIX_PATH=<install-path>
+cmake -S aws-c-event-stream -B aws-c-event-stream/build -DCMAKE_INSTALL_PREFIX=<install-path> -DCMAKE_PREFIX_PATH=<install-path>
 cmake --build aws-c-event-stream/build --target install
 ```
