@@ -18,6 +18,21 @@
 
 static const char *s_test_host_name = "127.0.0.1";
 
+struct client_test_data {
+    struct aws_allocator *allocator;
+    int received_message_flags;
+    struct aws_mutex sync_lock;
+    struct aws_condition_variable sync_cvar;
+    enum aws_event_stream_rpc_message_type received_message_type;
+    struct aws_byte_buf received_payload;
+    struct aws_event_stream_rpc_server_continuation_token *server_token;
+    struct aws_byte_buf last_seen_operation_name;
+    bool message_sent;
+    bool message_received;
+    bool client_token_closed;
+    bool server_token_closed;
+};
+
 struct test_data {
     struct aws_allocator *allocator;
     struct aws_event_loop_group *el_group;
@@ -33,6 +48,8 @@ struct test_data {
     aws_event_stream_rpc_server_stream_continuation_closed_fn *on_server_continuation_closed;
 
     aws_event_stream_rpc_client_connection_protocol_message_fn *on_client_message_received;
+
+    struct client_test_data client_test_data;
 
     void *user_data;
     void *server_continuation_user_data;
@@ -274,6 +291,10 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     ASSERT_SUCCESS(aws_mutex_init(&test_data->shutdown_lock));
     ASSERT_SUCCESS(aws_condition_variable_init(&test_data->shutdown_cvar));
 
+    ASSERT_SUCCESS(aws_mutex_init(&test_data->client_test_data.sync_lock));
+    ASSERT_SUCCESS(aws_condition_variable_init(&test_data->client_test_data.sync_cvar));
+    test_data->client_test_data.allocator = allocator;
+
     struct aws_socket_options socket_options = {
         .connect_timeout_ms = 3000,
         .domain = AWS_SOCKET_IPV4,
@@ -350,10 +371,13 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
         aws_condition_variable_wait_pred(
             &test_data->shutdown_cvar, &test_data->shutdown_lock, s_event_loop_shutdown_pred, test_data);
         aws_mutex_unlock(&test_data->shutdown_lock);
+        aws_thread_join_all_managed();
         aws_mutex_clean_up(&test_data->shutdown_lock);
         aws_condition_variable_clean_up(&test_data->shutdown_cvar);
         aws_mutex_clean_up(&test_data->setup_lock);
         aws_condition_variable_clean_up(&test_data->setup_cvar);
+        aws_mutex_clean_up(&test_data->client_test_data.sync_lock);
+        aws_condition_variable_clean_up(&test_data->client_test_data.sync_cvar);
     }
 
     aws_event_stream_library_clean_up();
@@ -377,21 +401,6 @@ AWS_TEST_CASE_FIXTURE(
     s_test_event_stream_rpc_client_connection_setup_and_teardown,
     s_fixture_shutdown,
     &s_test_data)
-
-struct client_test_data {
-    struct aws_allocator *allocator;
-    int received_message_flags;
-    struct aws_mutex sync_lock;
-    struct aws_condition_variable sync_cvar;
-    enum aws_event_stream_rpc_message_type received_message_type;
-    struct aws_byte_buf received_payload;
-    struct aws_event_stream_rpc_server_continuation_token *server_token;
-    struct aws_byte_buf last_seen_operation_name;
-    bool message_sent;
-    bool message_received;
-    bool client_token_closed;
-    bool server_token_closed;
-};
 
 static void s_rpc_client_message_flush(int error_code, void *user_data) {
     (void)error_code;
@@ -1242,14 +1251,10 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
     test_data->on_new_server_continuation = s_rpc_server_stream_continuation;
     test_data->on_server_continuation_closed = s_rpc_server_stream_continuation_closed;
 
-    struct client_test_data client_test_data = {
-        .allocator = allocator,
-        .sync_cvar = AWS_CONDITION_VARIABLE_INIT,
-        .sync_lock = AWS_MUTEX_INIT,
-    };
+    struct client_test_data *client_test_data = &test_data->client_test_data;
 
-    test_data->user_data = &client_test_data;
-    test_data->server_continuation_user_data = &client_test_data;
+    test_data->user_data = client_test_data;
+    test_data->server_continuation_user_data = client_test_data;
 
     struct aws_byte_buf connect_payload = aws_byte_buf_from_c_str("{ \"message\": \" connect message \" }");
     struct aws_event_stream_rpc_message_args connect_args = {
@@ -1260,53 +1265,53 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
     };
 
     ASSERT_SUCCESS(aws_event_stream_rpc_client_connection_send_protocol_message(
-        test_data->client_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->client_connection, &connect_args, s_rpc_client_message_flush, client_test_data));
 
-    aws_mutex_lock(&client_test_data.sync_lock);
+    aws_mutex_lock(&client_test_data->sync_lock);
     aws_condition_variable_wait_pred(
-        &client_test_data.sync_cvar,
-        &client_test_data.sync_lock,
+        &client_test_data->sync_cvar,
+        &client_test_data->sync_lock,
         s_rpc_client_message_transmission_completed_pred,
-        &client_test_data);
+        client_test_data);
 
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, client_test_data.received_message_type);
+    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT, client_test_data->received_message_type);
     ASSERT_BIN_ARRAYS_EQUALS(
         connect_payload.buffer,
         connect_payload.len,
-        client_test_data.received_payload.buffer,
-        client_test_data.received_payload.len);
-    aws_byte_buf_clean_up(&client_test_data.received_payload);
+        client_test_data->received_payload.buffer,
+        client_test_data->received_payload.len);
+    aws_byte_buf_clean_up(&client_test_data->received_payload);
 
-    client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data->received_message_type = 0;
+    client_test_data->message_received = false;
+    client_test_data->message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_client_message_flush, client_test_data));
 
     aws_condition_variable_wait_pred(
-        &client_test_data.sync_cvar,
-        &client_test_data.sync_lock,
+        &client_test_data->sync_cvar,
+        &client_test_data->sync_lock,
         s_rpc_client_message_transmission_completed_pred,
-        &client_test_data);
+        client_test_data);
 
-    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data.received_message_type);
+    ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data->received_message_type);
     ASSERT_BIN_ARRAYS_EQUALS(
         connect_payload.buffer,
         connect_payload.len,
-        client_test_data.received_payload.buffer,
-        client_test_data.received_payload.len);
-    aws_byte_buf_clean_up(&client_test_data.received_payload);
+        client_test_data->received_payload.buffer,
+        client_test_data->received_payload.len);
+    aws_byte_buf_clean_up(&client_test_data->received_payload);
 
-    client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data->received_message_type = 0;
+    client_test_data->message_received = false;
+    client_test_data->message_sent = false;
 
     struct aws_event_stream_rpc_client_stream_continuation_options continuation_options = {
-        .user_data = &client_test_data,
+        .user_data = client_test_data,
         .on_continuation = s_rpc_client_stream_continuation,
         .on_continuation_closed = s_rpc_client_stream_continuation_closed,
     };
@@ -1326,20 +1331,20 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
     };
 
     ASSERT_SUCCESS(aws_event_stream_rpc_client_continuation_activate(
-        client_token, operation_name, &operation_args, s_rpc_client_message_flush, &client_test_data));
+        client_token, operation_name, &operation_args, s_rpc_client_message_flush, client_test_data));
 
     aws_condition_variable_wait_pred(
-        &client_test_data.sync_cvar,
-        &client_test_data.sync_lock,
+        &client_test_data->sync_cvar,
+        &client_test_data->sync_lock,
         s_rpc_client_message_transmission_completed_pred,
-        &client_test_data);
-    aws_byte_buf_clean_up(&client_test_data.received_payload);
-    aws_byte_buf_clean_up(&client_test_data.last_seen_operation_name);
+        client_test_data);
+    aws_byte_buf_clean_up(&client_test_data->received_payload);
+    aws_byte_buf_clean_up(&client_test_data->last_seen_operation_name);
 
     ASSERT_ERROR(
         AWS_ERROR_INVALID_STATE,
         aws_event_stream_rpc_client_continuation_activate(
-            client_token, operation_name, &operation_args, s_rpc_client_message_flush, &client_test_data));
+            client_token, operation_name, &operation_args, s_rpc_client_message_flush, client_test_data));
 
     aws_event_stream_rpc_client_continuation_release(client_token);
 
@@ -1347,14 +1352,12 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
     aws_event_stream_rpc_server_connection_close(test_data->server_connection, AWS_ERROR_SUCCESS);
 
     aws_condition_variable_wait_pred(
-        &client_test_data.sync_cvar,
-        &client_test_data.sync_lock,
+        &client_test_data->sync_cvar,
+        &client_test_data->sync_lock,
         s_rpc_client_continuation_token_closed_pred,
-        &client_test_data);
+        client_test_data);
 
-    aws_mutex_unlock(&client_test_data.sync_lock);
-    aws_mutex_clean_up(&client_test_data.sync_lock);
-    aws_condition_variable_clean_up(&client_test_data.sync_cvar);
+    aws_mutex_unlock(&client_test_data->sync_lock);
 
     return AWS_OP_SUCCESS;
 }
