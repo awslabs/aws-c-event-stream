@@ -1243,7 +1243,8 @@ AWS_TEST_CASE_FIXTURE(
 static int s_test_event_stream_rpc_client_connection_continuation_duplicated_activate_fails(
     struct aws_allocator *allocator,
     void *ctx) {
-
+    (void)allocator;
+    
     struct test_data *test_data = ctx;
     test_data->on_server_message_received = s_rpc_server_connection_protocol_message;
     test_data->on_client_message_received = s_rpc_client_connection_protocol_message;
