@@ -208,6 +208,7 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
         aws_condition_variable_wait_pred(
             &test_data->shutdown_cvar, &test_data->shutdown_lock, s_shutdown_predicate_fn, test_data);
         aws_mutex_unlock(&test_data->shutdown_lock);
+        aws_thread_join_all_managed();
         aws_mutex_clean_up(&test_data->shutdown_lock);
         aws_condition_variable_clean_up(&test_data->shutdown_cvar);
     }
