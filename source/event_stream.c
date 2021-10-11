@@ -648,7 +648,8 @@ int aws_event_stream_add_string_header(
         .header_name_len = name_len,
         .header_value_len = value_len,
         .value_owned = copy,
-        .header_value_type = AWS_EVENT_STREAM_HEADER_STRING};
+        .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
+    };
 
     return s_add_variable_len_header(headers, &header, name, name_len, (uint8_t *)value, value_len, copy);
 }
@@ -692,7 +693,7 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
 
 static int s_copy_header_name(void *header_name, void *name, size_t name_len) {
 
-    if (name_len >= sizeof(header.header_name)) {
+    if (name_len >= sizeof(header_name)) {
         return aws_raise_error(AWS_ERROR_OVERFLOW_DETECTED);
     }
     memcpy(header_name, name, (size_t)name_len);
