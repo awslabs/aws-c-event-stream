@@ -691,12 +691,12 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
     return header;
 }
 
-static int s_copy_header_name(void *header_name, void *name, size_t name_len) {
+static int s_copy_header_name(struct aws_event_stream_header_value_pair *header, void *name, size_t name_len) {
 
-    if (name_len >= sizeof(header_name)) {
+    if (name_len >= sizeof(header->header_name)) {
         return aws_raise_error(AWS_ERROR_OVERFLOW_DETECTED);
     }
-    memcpy(header_name, name, (size_t)name_len);
+    memcpy((void *)header->header_name, name, name_len);
     return AWS_OP_SUCCESS;
 }
 
@@ -709,7 +709,7 @@ int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char 
         .header_value.static_val[0] = (uint8_t)value,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
 
@@ -724,7 +724,7 @@ int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char 
         .header_value_type = value ? AWS_EVENT_STREAM_HEADER_BOOL_TRUE : AWS_EVENT_STREAM_HEADER_BOOL_FALSE,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
 
@@ -743,7 +743,7 @@ int aws_event_stream_add_int16_header(
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT16,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
     aws_write_u16((uint16_t)value, header.header_value.static_val);
@@ -763,7 +763,7 @@ int aws_event_stream_add_int32_header(
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
     aws_write_u32((uint32_t)value, header.header_value.static_val);
@@ -783,7 +783,7 @@ int aws_event_stream_add_int64_header(
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT64,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
     aws_write_u64((uint64_t)value, header.header_value.static_val);
@@ -820,7 +820,7 @@ int aws_event_stream_add_timestamp_header(
         .header_value_type = AWS_EVENT_STREAM_HEADER_TIMESTAMP,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
     aws_write_u64((uint64_t)value, header.header_value.static_val);
@@ -840,7 +840,7 @@ int aws_event_stream_add_uuid_header(
         .header_value_type = AWS_EVENT_STREAM_HEADER_UUID,
     };
 
-    if (s_copy_header_name((void *)header.header_name, (void *)name, (size_t)name_len)) {
+    if (s_copy_header_name(&header, (void *)name, (size_t)name_len)) {
         return AWS_OP_ERR;
     }
     memcpy((void *)header.header_value.static_val, value, 16);
