@@ -596,7 +596,17 @@ static int s_send_protocol_message(
 
     args->flush_fn = flush_fn;
 
-    size_t headers_count = message_args->headers_count + 3;
+    size_t headers_count = 0;
+
+    if (aws_add_size_checked(message_args->headers_count, 3, &headers_count)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "id=%p: integer overflow detected when using headers_count %zu",
+            (void *)connection,
+            message_args->headers_count);
+        goto args_allocated_before_failure;
+    }
+
     struct aws_array_list headers_list;
     AWS_ZERO_STRUCT(headers_list);
 
