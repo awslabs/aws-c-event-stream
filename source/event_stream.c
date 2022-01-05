@@ -117,8 +117,6 @@ void aws_event_stream_library_clean_up(void) {
 /* Computes the byte length necessary to store the headers represented in the headers list.
  * returns that length. */
 uint32_t aws_event_stream_compute_headers_required_buffer_len(const struct aws_array_list *headers) {
-    AWS_FATAL_PRECONDITION(headers);
-
     if (!headers || !aws_array_list_length(headers)) {
         return 0;
     }
@@ -151,7 +149,6 @@ uint32_t aws_event_stream_compute_headers_required_buffer_len(const struct aws_a
  returns the new buffer offset for use elsewhere. Assumes buffer length is at least the length of the return value
  from compute_headers_length() */
 size_t aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer) {
-    AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(buffer);
 
     if (!headers || !aws_array_list_length(headers)) {
@@ -304,8 +301,6 @@ int aws_event_stream_message_init(
     struct aws_byte_buf *payload) {
     AWS_FATAL_PRECONDITION(message);
     AWS_FATAL_PRECONDITION(alloc);
-    AWS_FATAL_PRECONDITION(headers);
-    AWS_FATAL_PRECONDITION(payload);
 
     size_t payload_len = payload ? payload->len : 0;
 
