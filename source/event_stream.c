@@ -271,7 +271,7 @@ int aws_event_stream_read_headers_from_buffer(
             case AWS_EVENT_STREAM_HEADER_STRING:
                 header.header_value_len = aws_read_u16(buffer);
                 AWS_RETURN_ERROR_IF(
-                    AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN, header.header_value_len < UINT16_MAX);
+                    header.header_value_len < UINT16_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
                 buffer += sizeof(header.header_value_len);
                 header.header_value.variable_len_val = (uint8_t *)buffer;
                 buffer += header.header_value_len;
