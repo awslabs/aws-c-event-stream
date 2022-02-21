@@ -129,17 +129,25 @@ uint32_t aws_event_stream_compute_headers_required_buffer_len(const struct aws_a
         struct aws_event_stream_header_value_pair *header = NULL;
 
         aws_array_list_get_at_ptr(headers, (void **)&header, i);
-
-        headers_len += sizeof(header->header_name_len) + header->header_name_len + 1;
+        AWS_FATAL_ASSERT(
+            !aws_add_size_checked(headers_len, sizeof(header->header_name_len), &headers_len) &&
+            "integer overflow occurred computing total headers length.");
+        AWS_FATAL_ASSERT(
+            !aws_add_size_checked(headers_len, header->header_name_len + 1, &headers_len) &&
+            "integer overflow occurred computing total headers length.");
 
         if (header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING ||
             header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF) {
-            headers_len += sizeof(header->header_value_len);
+            AWS_FATAL_ASSERT(
+                !aws_add_size_checked(headers_len, sizeof(header->header_value_len), &headers_len) &&
+                "integer overflow occurred computing total headers length.");
         }
 
         if (header->header_value_type != AWS_EVENT_STREAM_HEADER_BOOL_FALSE &&
             header->header_value_type != AWS_EVENT_STREAM_HEADER_BOOL_TRUE) {
-            headers_len += header->header_value_len;
+            AWS_FATAL_ASSERT(
+                !aws_add_size_checked(headers_len, header->header_value_len, &headers_len) &&
+                "integer overflow occurred computing total headers length.");
         }
     }
 
@@ -350,7 +358,10 @@ int aws_event_stream_message_init(
     aws_byte_buf_write_be32(&message->message_buffer, running_crc);
 
     if (headers_length) {
-        aws_event_stream_write_headers_to_buffer_safe(headers, &message->message_buffer);
+        if (aws_event_stream_write_headers_to_buffer_safe(headers, &message->message_buffer)) {
+            aws_event_stream_message_clean_up(message);
+            return AWS_OP_ERR;
+        }
     }
 
     if (payload) {
@@ -391,10 +402,12 @@ int aws_event_stream_message_from_buffer(
     if (AWS_UNLIKELY(message_length > AWS_EVENT_STREAM_MAX_MESSAGE_SIZE)) {
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
     }
-
+    /* skip the headers for the moment, we'll handle those later. */
     aws_byte_cursor_advance(&parsing_cur, sizeof(uint32_t));
     uint32_t running_crc = aws_checksums_crc32(buffer->buffer, (int)PRELUDE_CRC_OFFSET, 0);
     uint32_t prelude_crc = 0;
+    const uint8_t *start_of_payload_checksum = parsing_cur.ptr;
+    size_t start_of_payload_checksum_pos = PRELUDE_CRC_OFFSET;
     aws_byte_cursor_read_be32(&parsing_cur, &prelude_crc);
 
     if (running_crc != prelude_crc) {
@@ -402,8 +415,8 @@ int aws_event_stream_message_from_buffer(
     }
 
     running_crc = aws_checksums_crc32(
-        buffer->buffer + PRELUDE_CRC_OFFSET,
-        (int)(message_length - PRELUDE_CRC_OFFSET - AWS_EVENT_STREAM_TRAILER_LENGTH),
+        start_of_payload_checksum,
+        (int)(message_length - start_of_payload_checksum_pos - AWS_EVENT_STREAM_TRAILER_LENGTH),
         running_crc);
     uint32_t message_crc = aws_read_u32(buffer->buffer + message_length - AWS_EVENT_STREAM_TRAILER_LENGTH);
 
