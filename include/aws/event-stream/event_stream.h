@@ -75,7 +75,7 @@ enum aws_event_stream_header_value_type {
     AWS_EVENT_STREAM_HEADER_UUID
 };
 
-static const unsigned int UUID_LEN = 16U;
+static const uint16_t UUID_LEN = 16U;
 struct aws_event_stream_header_value_pair {
     uint8_t header_name_len;
     char header_name[INT8_MAX];
