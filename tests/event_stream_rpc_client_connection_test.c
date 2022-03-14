@@ -408,6 +408,7 @@ static void s_rpc_client_message_flush(int error_code, void *user_data) {
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
     client_test_data->message_sent = true;
+    fprintf(stderr, "inside message flush\n");
     aws_mutex_unlock(&client_test_data->sync_lock);
     aws_condition_variable_notify_one(&client_test_data->sync_cvar);
 }
@@ -1188,6 +1189,8 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
     operation_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM;
     operation_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR;
 
+    fprintf(stderr, "sending server cont end.\n");
+
     ASSERT_SUCCESS(aws_event_stream_rpc_server_continuation_send_message(
         client_test_data.server_token, &operation_args, s_rpc_client_message_flush, &client_test_data));
 
@@ -1204,6 +1207,7 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
         &client_test_data.sync_lock,
         s_rpc_client_continuation_token_closed_pred,
         &client_test_data);
+    fprintf(stderr, "wait completed.\n");
 
     ASSERT_BIN_ARRAYS_EQUALS(
         operation_payload.buffer,
@@ -1228,6 +1232,7 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
 
     aws_mutex_unlock(&client_test_data.sync_lock);
     aws_mutex_clean_up(&client_test_data.sync_lock);
+    fprintf(stderr, "cleaning up.\n");
     aws_condition_variable_clean_up(&client_test_data.sync_cvar);
 
     return AWS_OP_SUCCESS;
