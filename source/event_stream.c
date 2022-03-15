@@ -701,7 +701,8 @@ int aws_event_stream_add_string_header(
     uint16_t value_len,
     int8_t copy) {
     AWS_FATAL_PRECONDITION(headers);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
     AWS_RETURN_ERROR_IF(value_len <= INT16_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
     struct aws_event_stream_header_value_pair header = {.header_name_len = name_len,
                                                         .header_value_len = value_len,
@@ -714,7 +715,7 @@ int aws_event_stream_add_string_header(
 struct aws_event_stream_header_value_pair aws_event_stream_create_string_header(
     struct aws_byte_cursor name,
     struct aws_byte_cursor value) {
-    AWS_FATAL_PRECONDITION(name.len <= INT8_MAX);
+    AWS_FATAL_PRECONDITION(name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX);
     AWS_FATAL_PRECONDITION(value.len <= INT16_MAX);
 
     struct aws_event_stream_header_value_pair header = {
@@ -733,7 +734,7 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_string_header(
 struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
     struct aws_byte_cursor name,
     int32_t value) {
-    AWS_FATAL_PRECONDITION(name.len <= INT8_MAX);
+    AWS_FATAL_PRECONDITION(name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX);
 
     struct aws_event_stream_header_value_pair header = {
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
@@ -751,7 +752,8 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
 int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {.header_name_len = name_len,
                                                         .header_value_len = 1,
@@ -767,7 +769,8 @@ int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char 
 int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
@@ -788,7 +791,8 @@ int aws_event_stream_add_int16_header(
     int16_t value) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
@@ -810,7 +814,8 @@ int aws_event_stream_add_int32_header(
     int32_t value) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
@@ -833,7 +838,8 @@ int aws_event_stream_add_int64_header(
 
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
@@ -857,7 +863,8 @@ int aws_event_stream_add_bytebuf_header(
     int8_t copy) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
     AWS_RETURN_ERROR_IF(value_len <= INT16_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {.header_name_len = name_len,
@@ -875,7 +882,8 @@ int aws_event_stream_add_timestamp_header(
     int64_t value) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
@@ -897,7 +905,8 @@ int aws_event_stream_add_uuid_header(
     const uint8_t *value) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
-    AWS_RETURN_ERROR_IF(name_len <= INT8_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+    AWS_RETURN_ERROR_IF(
+        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
