@@ -410,8 +410,9 @@ static void s_rpc_client_message_flush(int error_code, void *user_data) {
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
     client_test_data->client_message_sent = true;
-    aws_mutex_unlock(&client_test_data->sync_lock);
     aws_condition_variable_notify_one(&client_test_data->sync_cvar);
+    /* make these pessimistic to prevent a cleanup race. */
+    aws_mutex_unlock(&client_test_data->sync_lock);
 }
 
 static void s_rpc_server_message_flush(int error_code, void *user_data) {
@@ -420,8 +421,9 @@ static void s_rpc_server_message_flush(int error_code, void *user_data) {
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
     client_test_data->server_message_sent = true;
-    aws_mutex_unlock(&client_test_data->sync_lock);
     aws_condition_variable_notify_one(&client_test_data->sync_cvar);
+    /* make these pessimistic to prevent a cleanup race. */
+    aws_mutex_unlock(&client_test_data->sync_lock);
 }
 
 static bool s_rpc_client_message_transmission_completed_pred(void *arg) {
