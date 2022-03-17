@@ -27,8 +27,10 @@ struct client_test_data {
     struct aws_byte_buf received_payload;
     struct aws_event_stream_rpc_server_continuation_token *server_token;
     struct aws_byte_buf last_seen_operation_name;
-    bool message_sent;
-    bool message_received;
+    bool client_message_sent;
+    bool client_message_received;
+    bool server_message_sent;
+    bool server_message_received;
     bool client_token_closed;
     bool server_token_closed;
 };
@@ -407,14 +409,31 @@ static void s_rpc_client_message_flush(int error_code, void *user_data) {
 
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
-    client_test_data->message_sent = true;
-    aws_mutex_unlock(&client_test_data->sync_lock);
+    client_test_data->client_message_sent = true;
     aws_condition_variable_notify_one(&client_test_data->sync_cvar);
+    /* make these pessimistic to prevent a cleanup race. */
+    aws_mutex_unlock(&client_test_data->sync_lock);
+}
+
+static void s_rpc_server_message_flush(int error_code, void *user_data) {
+    (void)error_code;
+
+    struct client_test_data *client_test_data = user_data;
+    aws_mutex_lock(&client_test_data->sync_lock);
+    client_test_data->server_message_sent = true;
+    aws_condition_variable_notify_one(&client_test_data->sync_cvar);
+    /* make these pessimistic to prevent a cleanup race. */
+    aws_mutex_unlock(&client_test_data->sync_lock);
 }
 
 static bool s_rpc_client_message_transmission_completed_pred(void *arg) {
     struct client_test_data *client_test_data = arg;
-    return client_test_data->message_sent && client_test_data->message_received;
+    return client_test_data->client_message_sent && client_test_data->server_message_received;
+}
+
+static bool s_rpc_server_message_transmission_completed_pred(void *arg) {
+    struct client_test_data *client_test_data = arg;
+    return client_test_data->server_message_sent && client_test_data->client_message_received;
 }
 
 static void s_rpc_server_connection_protocol_message(
@@ -425,7 +444,7 @@ static void s_rpc_server_connection_protocol_message(
 
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
-    client_test_data->message_received = true;
+    client_test_data->server_message_received = true;
     client_test_data->received_message_type = message_args->message_type;
     aws_byte_buf_init_copy(&client_test_data->received_payload, client_test_data->allocator, message_args->payload);
     aws_mutex_unlock(&client_test_data->sync_lock);
@@ -440,7 +459,7 @@ static void s_rpc_client_connection_protocol_message(
     struct client_test_data *client_test_data = user_data;
 
     aws_mutex_lock(&client_test_data->sync_lock);
-    client_test_data->message_received = true;
+    client_test_data->client_message_received = true;
     client_test_data->received_message_type = message_args->message_type;
     client_test_data->received_message_flags = message_args->message_flags;
     aws_byte_buf_init_copy(&client_test_data->received_payload, client_test_data->allocator, message_args->payload);
@@ -489,19 +508,21 @@ static int s_test_event_stream_rpc_client_connection_connect(struct aws_allocato
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_server_message_flush, &client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data.received_message_type);
@@ -603,19 +624,21 @@ static int s_test_event_stream_rpc_client_connection_protocol_message(struct aws
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_server_message_flush, &client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data.received_message_type);
@@ -627,8 +650,10 @@ static int s_test_event_stream_rpc_client_connection_protocol_message(struct aws
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     struct aws_byte_buf ping_payload =
         aws_byte_buf_from_c_str("{ \"message\": \"hello device that will further isolate humans from each other "
@@ -661,16 +686,18 @@ static int s_test_event_stream_rpc_client_connection_protocol_message(struct aws
     ping_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PING_RESPONSE;
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &ping_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &ping_args, s_rpc_server_message_flush, &client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PING_RESPONSE, client_test_data.received_message_type);
@@ -706,7 +733,7 @@ static void s_rpc_client_stream_continuation(
     struct client_test_data *client_test_data = user_data;
 
     aws_mutex_lock(&client_test_data->sync_lock);
-    client_test_data->message_received = true;
+    client_test_data->client_message_received = true;
     client_test_data->received_message_type = message_args->message_type;
     aws_byte_buf_init_copy(&client_test_data->received_payload, client_test_data->allocator, message_args->payload);
     aws_mutex_unlock(&client_test_data->sync_lock);
@@ -755,7 +782,7 @@ static void s_rpc_server_stream_continuation(
 
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
-    client_test_data->message_received = true;
+    client_test_data->server_message_received = true;
     client_test_data->received_message_type = message_args->message_type;
     aws_byte_buf_init_copy(&client_test_data->received_payload, client_test_data->allocator, message_args->payload);
     aws_mutex_unlock(&client_test_data->sync_lock);
@@ -818,19 +845,21 @@ static int s_test_event_stream_rpc_client_connection_continuation_flow(struct aw
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_server_message_flush, &client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data.received_message_type);
@@ -842,8 +871,10 @@ static int s_test_event_stream_rpc_client_connection_continuation_flow(struct aw
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     struct aws_event_stream_rpc_client_stream_continuation_options continuation_options = {
         .user_data = &client_test_data,
@@ -890,19 +921,21 @@ static int s_test_event_stream_rpc_client_connection_continuation_flow(struct aw
     aws_byte_buf_clean_up(&client_test_data.last_seen_operation_name);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     operation_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM;
     operation_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_continuation_send_message(
-        client_test_data.server_token, &operation_args, s_rpc_client_message_flush, &client_test_data));
+        client_test_data.server_token, &operation_args, s_rpc_server_message_flush, &client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     aws_condition_variable_wait_pred(
@@ -986,19 +1019,21 @@ static int s_test_event_stream_rpc_client_connection_unactivated_continuation_fa
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_server_message_flush, &client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data.received_message_type);
@@ -1010,8 +1045,10 @@ static int s_test_event_stream_rpc_client_connection_unactivated_continuation_fa
     aws_byte_buf_clean_up(&client_test_data.received_payload);
 
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     struct aws_event_stream_rpc_client_stream_continuation_options continuation_options = {
         .user_data = &client_test_data,
@@ -1106,20 +1143,22 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
 
     /* server sends CONNECT_ACK */
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, &client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_server_message_flush, &client_test_data));
 
     /* ...wait until sent and received... */
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data.received_message_type);
@@ -1132,8 +1171,10 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
 
     /* client sends message creating new stream */
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     struct aws_event_stream_rpc_client_stream_continuation_options continuation_options = {
         .user_data = &client_test_data,
@@ -1182,20 +1223,22 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
 
     /* server sends response with TERMINATE_STREAM flag set */
     client_test_data.received_message_type = 0;
-    client_test_data.message_received = false;
-    client_test_data.message_sent = false;
+    client_test_data.client_message_received = false;
+    client_test_data.client_message_sent = false;
+    client_test_data.server_message_received = false;
+    client_test_data.server_message_sent = false;
 
     operation_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM;
     operation_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_continuation_send_message(
-        client_test_data.server_token, &operation_args, s_rpc_client_message_flush, &client_test_data));
+        client_test_data.server_token, &operation_args, s_rpc_server_message_flush, &client_test_data));
 
     /* ...wait until sent and received... */
     aws_condition_variable_wait_pred(
         &client_test_data.sync_cvar,
         &client_test_data.sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         &client_test_data);
 
     /* ...wait until client stream closed... */
@@ -1284,19 +1327,21 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
     aws_byte_buf_clean_up(&client_test_data->received_payload);
 
     client_test_data->received_message_type = 0;
-    client_test_data->message_received = false;
-    client_test_data->message_sent = false;
+    client_test_data->client_message_received = false;
+    client_test_data->client_message_sent = false;
+    client_test_data->server_message_received = false;
+    client_test_data->server_message_sent = false;
 
     connect_args.message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK;
     connect_args.message_flags = AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_CONNECTION_ACCEPTED;
 
     ASSERT_SUCCESS(aws_event_stream_rpc_server_connection_send_protocol_message(
-        test_data->server_connection, &connect_args, s_rpc_client_message_flush, client_test_data));
+        test_data->server_connection, &connect_args, s_rpc_server_message_flush, client_test_data));
 
     aws_condition_variable_wait_pred(
         &client_test_data->sync_cvar,
         &client_test_data->sync_lock,
-        s_rpc_client_message_transmission_completed_pred,
+        s_rpc_server_message_transmission_completed_pred,
         client_test_data);
 
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK, client_test_data->received_message_type);
@@ -1308,8 +1353,10 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
     aws_byte_buf_clean_up(&client_test_data->received_payload);
 
     client_test_data->received_message_type = 0;
-    client_test_data->message_received = false;
-    client_test_data->message_sent = false;
+    client_test_data->client_message_received = false;
+    client_test_data->client_message_sent = false;
+    client_test_data->server_message_received = false;
+    client_test_data->server_message_sent = false;
 
     struct aws_event_stream_rpc_client_stream_continuation_options continuation_options = {
         .user_data = client_test_data,

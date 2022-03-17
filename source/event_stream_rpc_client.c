@@ -543,7 +543,18 @@ static int s_send_protocol_message(
 
     args->flush_fn = flush_fn;
 
-    size_t headers_count = operation_name ? message_args->headers_count + 4 : message_args->headers_count + 3;
+    size_t headers_count = 0;
+
+    if (operation_name) {
+        if (aws_add_size_checked(message_args->headers_count, 4, &headers_count)) {
+            return AWS_OP_ERR;
+        }
+    } else {
+        if (aws_add_size_checked(message_args->headers_count, 3, &headers_count)) {
+            return AWS_OP_ERR;
+        }
+    }
+
     struct aws_array_list headers_list;
     AWS_ZERO_STRUCT(headers_list);
 
