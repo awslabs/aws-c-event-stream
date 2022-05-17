@@ -216,7 +216,7 @@ size_t aws_event_stream_write_headers_to_buffer(const struct aws_array_list *hea
     AWS_FATAL_PRECONDITION(buffer);
 
     uint32_t min_buffer_len_assumption = aws_event_stream_compute_headers_required_buffer_len(headers);
-    struct aws_byte_buf safer_buf = aws_byte_buf_from_array(buffer, min_buffer_len_assumption);
+    struct aws_byte_buf safer_buf = aws_byte_buf_from_empty_array(buffer, min_buffer_len_assumption);
 
     if (aws_event_stream_write_headers_to_buffer_safe(headers, &safer_buf)) {
         return 0;
