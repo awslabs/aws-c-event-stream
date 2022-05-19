@@ -125,6 +125,8 @@ AWS_EVENT_STREAM_API struct aws_event_stream_rpc_server_listener *aws_event_stre
     struct aws_event_stream_rpc_server_listener_options *options);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_listener_acquire(
     struct aws_event_stream_rpc_server_listener *listener);
+AWS_EVENT_STREAM_API int aws_event_stream_rpc_server_listener_get_bound_port(
+    struct aws_event_stream_rpc_server_listener *listener);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_listener_release(
     struct aws_event_stream_rpc_server_listener *listener);
 

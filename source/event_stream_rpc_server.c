@@ -425,6 +425,18 @@ error:
     return NULL;
 }
 
+int aws_event_stream_rpc_server_listener_get_bound_port(struct aws_event_stream_rpc_server_listener *server) {
+    if (!server) {
+        return -1;
+    }
+
+    // aws_event_stream_rpc_server_listener_acquire(server);
+    int port = aws_server_bootstrap_get_bound_port_of_socket_listener(server->bootstrap, server->listener);
+    // aws_event_stream_rpc_server_listener_release(server);
+
+    return port;
+}
+
 void aws_event_stream_rpc_server_listener_acquire(struct aws_event_stream_rpc_server_listener *server) {
     size_t current_count = aws_atomic_fetch_add_explicit(&server->ref_count, 1, aws_memory_order_relaxed);
 

@@ -184,6 +184,71 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
     return AWS_OP_SUCCESS;
 }
 
+static int s_fixture_setup_port0(struct aws_allocator *allocator, void *ctx) {
+    aws_event_stream_library_init(allocator);
+    struct test_data *test_data = ctx;
+    AWS_ZERO_STRUCT(*test_data);
+
+    struct aws_shutdown_callback_options el_shutdown_options = {
+        .shutdown_callback_fn = s_event_loop_shutdown_callback,
+        .shutdown_callback_user_data = test_data,
+    };
+    test_data->el_group = aws_event_loop_group_new_default(allocator, 0, &el_shutdown_options);
+    ASSERT_NOT_NULL(test_data->el_group);
+    test_data->server_bootstrap = aws_server_bootstrap_new(allocator, test_data->el_group);
+    ASSERT_NOT_NULL(test_data->server_bootstrap);
+
+    ASSERT_SUCCESS(aws_mutex_init(&test_data->shutdown_lock));
+    ASSERT_SUCCESS(aws_condition_variable_init(&test_data->shutdown_cvar));
+
+    struct aws_socket_options socket_options = {
+        .connect_timeout_ms = 3000,
+        .domain = AWS_SOCKET_IPV4,
+        .type = AWS_SOCKET_STREAM,
+    };
+
+    /* Find a random open port directly by ask bind() with port 0 */
+    uint16_t test_port = 0;
+    struct aws_event_stream_rpc_server_listener_options listener_options = {
+        .socket_options = &socket_options,
+        .host_name = "127.0.0.1",
+        .port = test_port,
+        .bootstrap = test_data->server_bootstrap,
+        .user_data = test_data,
+        .on_new_connection = s_fixture_on_new_server_connection,
+        .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
+        .on_destroy_callback = s_on_listener_destroy,
+    };
+
+    test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
+    ASSERT_NOT_NULL(test_data->listener);
+
+    int actual_port = aws_event_stream_rpc_server_listener_get_bound_port(test_data->listener);
+    ASSERT_TRUE(actual_port > 0);
+
+    test_data->allocator = allocator;
+
+    struct aws_testing_channel_options testing_channel_options = {
+        .clock_fn = aws_high_res_clock_get_ticks,
+    };
+    ASSERT_SUCCESS(testing_channel_init(&test_data->testing_channel, allocator, &testing_channel_options));
+
+    struct aws_event_stream_rpc_connection_options connection_options = {
+        .on_connection_protocol_message = s_fixture_on_protocol_message,
+        .on_incoming_stream = s_on_server_incoming_stream_shim,
+        .user_data = test_data,
+    };
+
+
+    test_data->connection = aws_event_stream_rpc_server_connection_from_existing_channel(
+        test_data->listener, test_data->testing_channel.channel, &connection_options);
+    ASSERT_NOT_NULL(test_data->connection);
+
+    testing_channel_run_currently_queued_tasks(&test_data->testing_channel);
+
+    return AWS_OP_SUCCESS;
+}
+
 static bool s_shutdown_predicate_fn(void *user_data) {
     struct test_data *test_data = user_data;
     return test_data->shutdown_completed;
@@ -230,6 +295,13 @@ static int s_test_event_stream_rpc_server_connection_setup_and_teardown(struct a
 AWS_TEST_CASE_FIXTURE(
     test_event_stream_rpc_server_connection_setup_and_teardown,
     s_fixture_setup,
+    s_test_event_stream_rpc_server_connection_setup_and_teardown,
+    s_fixture_shutdown,
+    &s_test_data)
+
+AWS_TEST_CASE_FIXTURE(
+    test_event_stream_rpc_server_connection_setup_and_teardown_with_bind_to_zero_port,
+    s_fixture_setup_port0,
     s_test_event_stream_rpc_server_connection_setup_and_teardown,
     s_fixture_shutdown,
     &s_test_data)
