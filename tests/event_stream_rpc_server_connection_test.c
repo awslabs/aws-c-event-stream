@@ -223,7 +223,7 @@ static int s_fixture_setup_port0(struct aws_allocator *allocator, void *ctx) {
     test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
     ASSERT_NOT_NULL(test_data->listener);
 
-    int actual_port = aws_event_stream_rpc_server_listener_get_bound_port(test_data->listener);
+    uint16_t actual_port = aws_event_stream_rpc_server_listener_get_bound_port(test_data->listener);
     ASSERT_TRUE(actual_port > 0);
 
     test_data->allocator = allocator;
@@ -238,7 +238,6 @@ static int s_fixture_setup_port0(struct aws_allocator *allocator, void *ctx) {
         .on_incoming_stream = s_on_server_incoming_stream_shim,
         .user_data = test_data,
     };
-
 
     test_data->connection = aws_event_stream_rpc_server_connection_from_existing_channel(
         test_data->listener, test_data->testing_channel.channel, &connection_options);

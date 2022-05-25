@@ -22,6 +22,7 @@
 
 #include <aws/io/channel.h>
 #include <aws/io/channel_bootstrap.h>
+#include <aws/io/socket.h>
 
 #include <inttypes.h>
 
@@ -425,16 +426,14 @@ error:
     return NULL;
 }
 
-int aws_event_stream_rpc_server_listener_get_bound_port(struct aws_event_stream_rpc_server_listener *server) {
-    if (!server) {
-        return -1;
-    }
+uint16_t aws_event_stream_rpc_server_listener_get_bound_port(
+    const struct aws_event_stream_rpc_server_listener *server) {
 
-    // aws_event_stream_rpc_server_listener_acquire(server);
-    int port = aws_server_bootstrap_get_bound_port_of_socket_listener(server->bootstrap, server->listener);
-    // aws_event_stream_rpc_server_listener_release(server);
-
-    return port;
+    struct aws_socket_endpoint address;
+    AWS_ZERO_STRUCT(address);
+    /* not checking error code because it can't fail when called on a listening socket */
+    aws_socket_get_bound_address(server->listener, &address);
+    return address.port;
 }
 
 void aws_event_stream_rpc_server_listener_acquire(struct aws_event_stream_rpc_server_listener *server) {

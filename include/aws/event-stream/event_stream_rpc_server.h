@@ -125,10 +125,15 @@ AWS_EVENT_STREAM_API struct aws_event_stream_rpc_server_listener *aws_event_stre
     struct aws_event_stream_rpc_server_listener_options *options);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_listener_acquire(
     struct aws_event_stream_rpc_server_listener *listener);
-AWS_EVENT_STREAM_API int aws_event_stream_rpc_server_listener_get_bound_port(
-    struct aws_event_stream_rpc_server_listener *listener);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_server_listener_release(
     struct aws_event_stream_rpc_server_listener *listener);
+
+/**
+ * Get the local port which the listener's socket is bound to.
+ */
+AWS_EVENT_STREAM_API
+uint16_t aws_event_stream_rpc_server_listener_get_bound_port(
+    const struct aws_event_stream_rpc_server_listener *listener);
 
 /**
  * Bypasses server, and creates a connection on an already existing channel. No connection lifetime callbacks will be
