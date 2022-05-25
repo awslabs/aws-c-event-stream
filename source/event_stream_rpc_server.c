@@ -912,13 +912,6 @@ static void s_route_message_by_type(
                     AWS_LS_EVENT_STREAM_RPC_SERVER,
                     "id=%p: stream_id is invalid because it's not sequentially increasing",
                     (void *)connection);
-
-                aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
-                s_send_connection_level_error(
-                    connection,
-                    AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR,
-                    0,
-                    &s_invalid_new_client_stream_id_error);
                 return;
             }
 
