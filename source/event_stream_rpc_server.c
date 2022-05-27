@@ -82,7 +82,17 @@ struct aws_event_stream_rpc_server_continuation_token {
 void s_continuation_destroy(void *value) {
     struct aws_event_stream_rpc_server_continuation_token *continuation = value;
     AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying continuation", (void *)continuation);
-    continuation->closed_fn(continuation, continuation->user_data);
+
+    /*
+     * When creating a stream, we end up putting the continuation in the table before we finish initializing it.
+     * If an error occurs in the on incoming stream callback, we end up with a continuation with no user data or
+     * callbacks.  This means we have to check closed_fn for validity even though the success path does a fatal assert
+     * on validity.
+     */
+    if (continuation->closed_fn != NULL) {
+        continuation->closed_fn(continuation, continuation->user_data);
+    }
+
     aws_event_stream_rpc_server_continuation_release(continuation);
 }
 
@@ -1004,7 +1014,12 @@ static void s_route_message_by_type(
                 AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: invoking on_incoming_stream callback", (void *)connection);
             if (connection->on_incoming_stream(
                     continuation->connection, continuation, operation_name, &options, connection->user_data)) {
-                aws_event_stream_rpc_server_continuation_release(continuation);
+
+                /*
+                 * We don't release the continuation here (unlike above in the put failure path) because the on remove
+                 * function for the continuation table (s_continuation_destroy) will invoke continuation release.
+                 */
+                aws_hash_table_remove(&connection->continuation_table, &continuation->stream_id, NULL, NULL);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
                 return;
