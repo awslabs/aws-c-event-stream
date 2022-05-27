@@ -1012,13 +1012,19 @@ static void s_route_message_by_type(
             aws_event_stream_rpc_server_continuation_acquire(continuation);
             AWS_LOGF_TRACE(
                 AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: invoking on_incoming_stream callback", (void *)connection);
+            /*
+             * This callback must only keep a ref to the continuation on a success path.  On a failure, it must
+             * leave the ref count alone so that the release + removal destroys the continuation
+             */
             if (connection->on_incoming_stream(
                     continuation->connection, continuation, operation_name, &options, connection->user_data)) {
 
-                /*
-                 * We don't release the continuation here (unlike above in the put failure path) because the on remove
-                 * function for the continuation table (s_continuation_destroy) will invoke continuation release.
-                 */
+                AWS_FATAL_ASSERT(aws_atomic_load_int(&continuation->ref_count) == 2);
+
+                /* undo the continuation acquire that was done a few lines above */
+                aws_event_stream_rpc_server_continuation_release(continuation);
+
+                /* removing the continuation from the table will do the final decref on the continuation */
                 aws_hash_table_remove(&connection->continuation_table, &continuation->stream_id, NULL, NULL);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
@@ -1033,6 +1039,8 @@ static void s_route_message_by_type(
 
             connection->latest_stream_id = stream_id;
             continuation->continuation_fn(continuation, &message_args, continuation->user_data);
+
+            /* undo the acquire made before the on_incoming_stream callback invocation */
             aws_event_stream_rpc_server_continuation_release(continuation);
         }
 
