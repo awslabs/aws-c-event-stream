@@ -82,7 +82,17 @@ struct aws_event_stream_rpc_server_continuation_token {
 void s_continuation_destroy(void *value) {
     struct aws_event_stream_rpc_server_continuation_token *continuation = value;
     AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying continuation", (void *)continuation);
-    continuation->closed_fn(continuation, continuation->user_data);
+
+    /*
+     * When creating a stream, we end up putting the continuation in the table before we finish initializing it.
+     * If an error occurs in the on incoming stream callback, we end up with a continuation with no user data or
+     * callbacks.  This means we have to check closed_fn for validity even though the success path does a fatal assert
+     * on validity.
+     */
+    if (continuation->closed_fn != NULL) {
+        continuation->closed_fn(continuation, continuation->user_data);
+    }
+
     aws_event_stream_rpc_server_continuation_release(continuation);
 }
 
@@ -1002,9 +1012,20 @@ static void s_route_message_by_type(
             aws_event_stream_rpc_server_continuation_acquire(continuation);
             AWS_LOGF_TRACE(
                 AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: invoking on_incoming_stream callback", (void *)connection);
+            /*
+             * This callback must only keep a ref to the continuation on a success path.  On a failure, it must
+             * leave the ref count alone so that the release + removal destroys the continuation
+             */
             if (connection->on_incoming_stream(
                     continuation->connection, continuation, operation_name, &options, connection->user_data)) {
+
+                AWS_FATAL_ASSERT(aws_atomic_load_int(&continuation->ref_count) == 2);
+
+                /* undo the continuation acquire that was done a few lines above */
                 aws_event_stream_rpc_server_continuation_release(continuation);
+
+                /* removing the continuation from the table will do the final decref on the continuation */
+                aws_hash_table_remove(&connection->continuation_table, &continuation->stream_id, NULL, NULL);
                 s_send_connection_level_error(
                     connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_INTERNAL_ERROR, 0, &s_internal_error);
                 return;
@@ -1018,6 +1039,8 @@ static void s_route_message_by_type(
 
             connection->latest_stream_id = stream_id;
             continuation->continuation_fn(continuation, &message_args, continuation->user_data);
+
+            /* undo the acquire made before the on_incoming_stream callback invocation */
             aws_event_stream_rpc_server_continuation_release(continuation);
         }
 
