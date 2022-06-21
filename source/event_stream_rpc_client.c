@@ -747,14 +747,22 @@ static void s_route_message_by_type(
         struct aws_hash_element *continuation_element = NULL;
         if (aws_hash_table_find(&connection->continuation_table, &stream_id, &continuation_element) ||
             !continuation_element) {
+            bool old_stream_id = stream_id <= connection->latest_stream_id;
             aws_mutex_unlock(&connection->stream_lock);
-            AWS_LOGF_ERROR(
-                AWS_LS_EVENT_STREAM_RPC_CLIENT,
-                "id=%p: a stream id was received that was not created by this client",
-                (void *)connection);
-            aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
-            s_send_connection_level_error(
-                connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_client_stream_id_error);
+            if (!old_stream_id) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_RPC_CLIENT,
+                    "id=%p: a stream id was received that was not created by this client",
+                    (void *)connection);
+                aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR);
+                s_send_connection_level_error(
+                    connection, AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_PROTOCOL_ERROR, 0, &s_invalid_client_stream_id_error);
+            } else {
+                AWS_LOGF_WARN(
+                    AWS_LS_EVENT_STREAM_RPC_CLIENT,
+                    "id=%p: a stream id was received that corresponds to an already-closed stream",
+                    (void *)connection);
+            }
             return;
         }
 
