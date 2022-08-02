@@ -116,7 +116,10 @@ static void s_event_loop_shutdown_callback(void *user_data) {
     aws_condition_variable_notify_one(&test_data->shutdown_cvar);
 }
 
-static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
+static int s_fixture_setup_shared(
+    struct aws_allocator *allocator,
+    void *ctx,
+    aws_event_stream_rpc_server_on_incoming_stream_fn *on_incoming_stream) {
     aws_event_stream_library_init(allocator);
     struct test_data *test_data = ctx;
     AWS_ZERO_STRUCT(*test_data);
@@ -171,6 +174,94 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
 
     struct aws_event_stream_rpc_connection_options connection_options = {
         .on_connection_protocol_message = s_fixture_on_protocol_message,
+        .on_incoming_stream = on_incoming_stream,
+        .user_data = test_data,
+    };
+
+    test_data->connection = aws_event_stream_rpc_server_connection_from_existing_channel(
+        test_data->listener, test_data->testing_channel.channel, &connection_options);
+    ASSERT_NOT_NULL(test_data->connection);
+
+    testing_channel_run_currently_queued_tasks(&test_data->testing_channel);
+
+    return AWS_OP_SUCCESS;
+}
+
+static int s_on_server_incoming_stream_failure(
+    struct aws_event_stream_rpc_server_connection *connection,
+    struct aws_event_stream_rpc_server_continuation_token *token,
+    struct aws_byte_cursor operation_name,
+    struct aws_event_stream_rpc_server_stream_continuation_options *continuation_options,
+    void *user_data) {
+
+    (void)connection;
+    (void)token;
+    (void)operation_name;
+    (void)continuation_options;
+    (void)user_data;
+
+    return AWS_OP_ERR;
+}
+
+static int s_fixture_setup_new_stream_failure(struct aws_allocator *allocator, void *ctx) {
+    return s_fixture_setup_shared(allocator, ctx, s_on_server_incoming_stream_failure);
+}
+
+static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
+    return s_fixture_setup_shared(allocator, ctx, s_on_server_incoming_stream_shim);
+}
+
+static int s_fixture_setup_port0(struct aws_allocator *allocator, void *ctx) {
+    aws_event_stream_library_init(allocator);
+    struct test_data *test_data = ctx;
+    AWS_ZERO_STRUCT(*test_data);
+
+    struct aws_shutdown_callback_options el_shutdown_options = {
+        .shutdown_callback_fn = s_event_loop_shutdown_callback,
+        .shutdown_callback_user_data = test_data,
+    };
+    test_data->el_group = aws_event_loop_group_new_default(allocator, 0, &el_shutdown_options);
+    ASSERT_NOT_NULL(test_data->el_group);
+    test_data->server_bootstrap = aws_server_bootstrap_new(allocator, test_data->el_group);
+    ASSERT_NOT_NULL(test_data->server_bootstrap);
+
+    ASSERT_SUCCESS(aws_mutex_init(&test_data->shutdown_lock));
+    ASSERT_SUCCESS(aws_condition_variable_init(&test_data->shutdown_cvar));
+
+    struct aws_socket_options socket_options = {
+        .connect_timeout_ms = 3000,
+        .domain = AWS_SOCKET_IPV4,
+        .type = AWS_SOCKET_STREAM,
+    };
+
+    /* Find a random open port directly by ask bind() with port 0 */
+    uint16_t test_port = 0;
+    struct aws_event_stream_rpc_server_listener_options listener_options = {
+        .socket_options = &socket_options,
+        .host_name = "127.0.0.1",
+        .port = test_port,
+        .bootstrap = test_data->server_bootstrap,
+        .user_data = test_data,
+        .on_new_connection = s_fixture_on_new_server_connection,
+        .on_connection_shutdown = s_fixture_on_server_connection_shutdown,
+        .on_destroy_callback = s_on_listener_destroy,
+    };
+
+    test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
+    ASSERT_NOT_NULL(test_data->listener);
+
+    uint16_t actual_port = aws_event_stream_rpc_server_listener_get_bound_port(test_data->listener);
+    ASSERT_TRUE(actual_port > 0);
+
+    test_data->allocator = allocator;
+
+    struct aws_testing_channel_options testing_channel_options = {
+        .clock_fn = aws_high_res_clock_get_ticks,
+    };
+    ASSERT_SUCCESS(testing_channel_init(&test_data->testing_channel, allocator, &testing_channel_options));
+
+    struct aws_event_stream_rpc_connection_options connection_options = {
+        .on_connection_protocol_message = s_fixture_on_protocol_message,
         .on_incoming_stream = s_on_server_incoming_stream_shim,
         .user_data = test_data,
     };
@@ -208,6 +299,7 @@ static int s_fixture_shutdown(struct aws_allocator *allocator, int setup_result,
         aws_condition_variable_wait_pred(
             &test_data->shutdown_cvar, &test_data->shutdown_lock, s_shutdown_predicate_fn, test_data);
         aws_mutex_unlock(&test_data->shutdown_lock);
+        aws_thread_join_all_managed();
         aws_mutex_clean_up(&test_data->shutdown_lock);
         aws_condition_variable_clean_up(&test_data->shutdown_cvar);
     }
@@ -229,6 +321,13 @@ static int s_test_event_stream_rpc_server_connection_setup_and_teardown(struct a
 AWS_TEST_CASE_FIXTURE(
     test_event_stream_rpc_server_connection_setup_and_teardown,
     s_fixture_setup,
+    s_test_event_stream_rpc_server_connection_setup_and_teardown,
+    s_fixture_shutdown,
+    &s_test_data)
+
+AWS_TEST_CASE_FIXTURE(
+    test_event_stream_rpc_server_connection_setup_and_teardown_with_bind_to_zero_port,
+    s_fixture_setup_port0,
     s_test_event_stream_rpc_server_connection_setup_and_teardown,
     s_fixture_shutdown,
     &s_test_data)
@@ -1211,6 +1310,74 @@ AWS_TEST_CASE_FIXTURE(
     test_event_stream_rpc_server_connection_continuation_messages_flow,
     s_fixture_setup,
     s_test_event_stream_rpc_server_connection_continuation_messages_flow,
+    s_fixture_shutdown,
+    &s_test_data)
+
+static int s_test_event_stream_rpc_server_connection_continuation_failure(struct aws_allocator *allocator, void *ctx) {
+    struct test_data *test_data = ctx;
+
+    struct received_protocol_message_data message_data = {
+        .allocator = allocator,
+    };
+
+    test_data->user_data = &message_data;
+    test_data->received_fn = s_on_recieved_protocol_message;
+    test_data->continuation_user_data = &message_data;
+    test_data->on_continuation = s_on_continuation_message;
+    test_data->on_continuation_closed = s_on_continuation_closed;
+
+    s_do_connect(allocator, test_data, &message_data);
+
+    struct aws_byte_buf payload = aws_byte_buf_from_c_str("test operation payload!");
+    struct aws_event_stream_message message;
+    struct aws_array_list headers_list;
+    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers_list, allocator));
+
+    struct aws_byte_cursor operation_name = aws_byte_cursor_from_c_str("testOperation");
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_message_type_name.ptr,
+        (uint8_t)aws_event_stream_rpc_message_type_name.len,
+        AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_MESSAGE));
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_message_flags_name.ptr,
+        (uint8_t)aws_event_stream_rpc_message_flags_name.len,
+        0));
+    ASSERT_SUCCESS(aws_event_stream_add_int32_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_stream_id_name.ptr,
+        (uint8_t)aws_event_stream_rpc_stream_id_name.len,
+        1));
+    ASSERT_SUCCESS(aws_event_stream_add_string_header(
+        &headers_list,
+        (const char *)aws_event_stream_rpc_operation_name.ptr,
+        (uint8_t)aws_event_stream_rpc_operation_name.len,
+        (const char *)operation_name.ptr,
+        (uint16_t)operation_name.len,
+        0));
+
+    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers_list, &payload));
+
+    struct aws_byte_cursor send_data = aws_byte_cursor_from_array(
+        aws_event_stream_message_buffer(&message), aws_event_stream_message_total_length(&message));
+    ASSERT_SUCCESS(testing_channel_push_read_data(&test_data->testing_channel, send_data));
+    testing_channel_drain_queued_tasks(&test_data->testing_channel);
+    aws_event_stream_message_clean_up(&message);
+    aws_array_list_clean_up(&headers_list);
+
+    ASSERT_NULL(message_data.continuation_token);
+
+    aws_event_stream_rpc_server_connection_close(test_data->connection, AWS_ERROR_SUCCESS);
+    testing_channel_drain_queued_tasks(&test_data->testing_channel);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    test_event_stream_rpc_server_connection_continuation_failure,
+    s_fixture_setup_new_stream_failure,
+    s_test_event_stream_rpc_server_connection_continuation_failure,
     s_fixture_shutdown,
     &s_test_data)
 

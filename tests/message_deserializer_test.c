@@ -15,7 +15,8 @@ static int s_test_outgoing_no_op_valid_fn(struct aws_allocator *allocator, void 
     struct aws_event_stream_message message;
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
     ASSERT_SUCCESS(
-        aws_event_stream_message_from_buffer(&message, NULL, &test_buf), "Message validation should have succeeded");
+        aws_event_stream_message_from_buffer(&message, allocator, &test_buf),
+        "Message validation should have succeeded");
 
     ASSERT_INT_EQUALS(
         0x00000010, aws_event_stream_message_total_length(&message), "Message length should have been 0x10");
@@ -43,7 +44,8 @@ static int s_test_outgoing_application_data_no_headers_valid_fn(struct aws_alloc
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
     ASSERT_SUCCESS(
-        aws_event_stream_message_from_buffer(&message, NULL, &test_buf), "Message validation should have succeeded");
+        aws_event_stream_message_from_buffer(&message, allocator, &test_buf),
+        "Message validation should have succeeded");
 
     ASSERT_INT_EQUALS(
         0x0000001D, aws_event_stream_message_total_length(&message), "Message length should have been 0x0000001D");

@@ -20,6 +20,9 @@
 /* max header size is 128kb */
 #define AWS_EVENT_STREAM_MAX_HEADERS_SIZE (128 * 1024)
 
+/* Max header name length is 127 bytes */
+#define AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX (INT8_MAX)
+
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_EVENT_STREAM_PACKAGE_ID),
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
@@ -54,8 +57,7 @@ struct aws_event_stream_message_prelude {
 
 struct aws_event_stream_message {
     struct aws_allocator *alloc;
-    uint8_t *message_buffer;
-    uint8_t owns_buffer;
+    struct aws_byte_buf message_buffer;
 };
 
 #define AWS_EVENT_STREAM_PRELUDE_LENGTH (uint32_t)(sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t))
@@ -76,6 +78,7 @@ enum aws_event_stream_header_value_type {
     AWS_EVENT_STREAM_HEADER_UUID
 };
 
+static const uint16_t UUID_LEN = 16U;
 struct aws_event_stream_header_value_pair {
     uint8_t header_name_len;
     char header_name[INT8_MAX];
@@ -244,6 +247,22 @@ AWS_EVENT_STREAM_API const uint8_t *aws_event_stream_message_buffer(const struct
 AWS_EVENT_STREAM_API uint32_t
     aws_event_stream_compute_headers_required_buffer_len(const struct aws_array_list *headers);
 
+/**
+ * Writes headers to buf assuming buf is large enough to hold the data. Prefer this function over the unsafe variant
+ * 'aws_event_stream_write_headers_to_buffer'.
+ *
+ * Returns AWS_OP_SUCCESS if the headers were successfully and completely written and AWS_OP_ERR otherwise.
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_write_headers_to_buffer_safe(
+    const struct aws_array_list *headers,
+    struct aws_byte_buf *buf);
+
+/**
+ * Deprecated in favor of 'aws_event_stream_write_headers_to_buffer_safe' as this API is unsafe.
+ *
+ * Writes headers to buffer and returns the length of bytes written to buffer. Assumes buffer is large enough to
+ * store the headers.
+ */
 AWS_EVENT_STREAM_API size_t
     aws_event_stream_write_headers_to_buffer(const struct aws_array_list *headers, uint8_t *buffer);
 
