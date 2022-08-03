@@ -353,6 +353,8 @@ void aws_event_stream_rpc_client_connection_release(const struct aws_event_strea
         (void *)connection,
         ref_count - 1);
 
+    AWS_FATAL_ASSERT(ref_count != 0 && "Connection ref count has gone negative");
+
     if (ref_count == 1) {
         s_destroy_connection(connection_mut);
     }
@@ -953,6 +955,8 @@ void aws_event_stream_rpc_client_continuation_release(
         "id=%p: continuation released, new ref count is %zu.",
         (void *)continuation,
         ref_count - 1);
+
+    AWS_FATAL_ASSERT(ref_count != 0 && "Continuation ref count has gone negative");
 
     if (ref_count == 1) {
         struct aws_allocator *allocator = continuation_mut->connection->allocator;
