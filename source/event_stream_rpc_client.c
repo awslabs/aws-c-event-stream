@@ -201,7 +201,7 @@ static int s_mark_each_continuation_closed(void *context, struct aws_hash_elemen
 /* Invoke continuation's on_closed() callback.
  * A lock must NOT be hold while calling this */
 static void s_complete_continuation(struct aws_event_stream_rpc_client_continuation_token *token) {
-    AWS_LOGF_DEBUG(
+    AWS_LOGF_INFO(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "token=%p: token with stream-id %" PRIu32 ", purged from the stream table",
         (void *)token,
@@ -451,6 +451,11 @@ static void s_on_protocol_message_written_fn(
     aws_event_stream_rpc_client_connection_release(message_args->connection);
 
     if (message_args->continuation) {
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_CLIENT,
+            "token=%p: token with stream-id %" PRIu32 " released via s_on_protocol_message_written_fn",
+            (void *)message_args->continuation,
+            message_args->continuation->stream_id);
         aws_event_stream_rpc_client_continuation_release(message_args->continuation);
     }
 
@@ -517,6 +522,13 @@ static int s_send_protocol_message(
             (void *)connection,
             (void *)continuation);
         args->continuation = continuation;
+
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_CLIENT,
+            "id=%p: continuation %p, stream_id %" PRIu32 ", acquiring reference in s_send_protocol_message",
+            (void *)connection,
+            (void *)continuation,
+            continuation->stream_id);
         aws_event_stream_rpc_client_continuation_acquire(continuation);
 
         if (message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
@@ -771,8 +783,22 @@ static void s_route_message_by_type(
         aws_mutex_unlock(&connection->stream_lock);
 
         continuation = continuation_element->value;
+
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_CLIENT,
+            "id=%p: continuation %p, stream_id %" PRIu32 ", acquiring reference in s_route_message_by_type",
+            (void *)connection,
+            (void *)continuation,
+            continuation->stream_id);
         aws_event_stream_rpc_client_continuation_acquire(continuation);
         continuation->continuation_fn(continuation, &message_args, continuation->user_data);
+
+        AWS_LOGF_INFO(
+            AWS_LS_EVENT_STREAM_RPC_CLIENT,
+            "token=%p: continuation with stream-id %" PRIu32 " released via s_route_message_by_type",
+            (void *)continuation,
+            continuation->stream_id);
+
         aws_event_stream_rpc_client_continuation_release(continuation);
 
         /* if it was a terminal stream message purge it from the hash table. The delete will decref the continuation. */
@@ -909,7 +935,7 @@ struct aws_event_stream_rpc_client_continuation_token *aws_event_stream_rpc_clie
         return NULL;
     }
 
-    AWS_LOGF_DEBUG(
+    AWS_LOGF_INFO(
         AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: continuation created %p", (void *)connection, (void *)continuation);
     continuation->connection = connection;
     aws_event_stream_rpc_client_connection_acquire(continuation->connection);
@@ -933,7 +959,7 @@ void aws_event_stream_rpc_client_continuation_acquire(
         &((struct aws_event_stream_rpc_client_continuation_token *)continuation)->ref_count,
         1u,
         aws_memory_order_relaxed);
-    AWS_LOGF_TRACE(
+    AWS_LOGF_INFO(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: continuation acquired, new ref count is %zu.",
         (void *)continuation,
@@ -950,7 +976,7 @@ void aws_event_stream_rpc_client_continuation_release(
         (struct aws_event_stream_rpc_client_continuation_token *)continuation;
     size_t ref_count = aws_atomic_fetch_sub_explicit(&continuation_mut->ref_count, 1, aws_memory_order_seq_cst);
 
-    AWS_LOGF_TRACE(
+    AWS_LOGF_INFO(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: continuation released, new ref count is %zu.",
         (void *)continuation,
@@ -1036,6 +1062,13 @@ int aws_event_stream_rpc_client_continuation_activate(
     }
 
     /* The continuation table gets a ref count on the continuation. Take it here. */
+    AWS_LOGF_INFO(
+        AWS_LS_EVENT_STREAM_RPC_CLIENT,
+        "id=%p: continuation %p, stream_id %" PRIu32
+        ", acquiring reference in aws_event_stream_rpc_client_continuation_activate",
+        (void *)continuation->connection,
+        (void *)continuation,
+        continuation->stream_id);
     aws_event_stream_rpc_client_continuation_acquire(continuation);
 
     continuation->connection->latest_stream_id = continuation->stream_id;
