@@ -353,6 +353,11 @@ void aws_event_stream_rpc_client_connection_release(const struct aws_event_strea
         (void *)connection,
         ref_count - 1);
 
+    if (ref_count <= 0) {
+        struct aws_logger *logger = aws_logger_get();
+        aws_logger_flush_and_close(logger);
+    }
+
     AWS_FATAL_ASSERT(ref_count != 0 && "Connection ref count has gone negative");
 
     if (ref_count == 1) {
