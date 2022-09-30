@@ -323,7 +323,7 @@ error:
 void aws_event_stream_rpc_client_connection_acquire(const struct aws_event_stream_rpc_client_connection *connection) {
     AWS_PRECONDITION(connection);
     size_t current_count = aws_atomic_fetch_add_explicit(
-        &((struct aws_event_stream_rpc_client_connection *)connection)->ref_count, 1, aws_memory_order_relaxed);
+        &((struct aws_event_stream_rpc_client_connection *)connection)->ref_count, 1, aws_memory_order_seq_cst);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: connection acquired, new ref count is %zu.",
@@ -934,7 +934,7 @@ void aws_event_stream_rpc_client_continuation_acquire(
     size_t current_count = aws_atomic_fetch_add_explicit(
         &((struct aws_event_stream_rpc_client_continuation_token *)continuation)->ref_count,
         1u,
-        aws_memory_order_relaxed);
+        aws_memory_order_seq_cst);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: continuation acquired, new ref count is %zu.",
