@@ -970,9 +970,9 @@ void aws_event_stream_rpc_client_continuation_release(
     AWS_FATAL_ASSERT(ref_count != 0 && "Continuation ref count has gone negative");
 
     if (ref_count == 1) {
-        //struct aws_allocator *allocator = continuation_mut->connection->allocator;
+        struct aws_allocator *allocator = continuation_mut->connection->allocator;
         aws_event_stream_rpc_client_connection_release(continuation_mut->connection);
-        // aws_mem_release(allocator, continuation_mut);
+        aws_mem_release(allocator, continuation_mut);
     }
 }
 
