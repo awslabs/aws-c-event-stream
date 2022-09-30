@@ -52,6 +52,9 @@ struct aws_event_stream_rpc_client_continuation_token {
     void *user_data;
     struct aws_atomic_var ref_count;
     struct aws_atomic_var is_closed;
+
+    struct aws_atomic_var ref_tracking_index;
+    uint8_t ref_tracking_buffer[1000];
 };
 
 static void s_on_message_received(struct aws_event_stream_message *message, int error_code, void *user_data);
@@ -211,7 +214,7 @@ static void s_complete_continuation(struct aws_event_stream_rpc_client_continuat
         token->closed_fn(token, token->user_data);
     }
 
-    aws_event_stream_rpc_client_continuation_release(token);
+    aws_event_stream_rpc_client_continuation_release(token, 5);
 }
 
 static int s_complete_and_clear_each_continuation(void *context, struct aws_hash_element *p_element) {
@@ -451,7 +454,7 @@ static void s_on_protocol_message_written_fn(
     aws_event_stream_rpc_client_connection_release(message_args->connection);
 
     if (message_args->continuation) {
-        aws_event_stream_rpc_client_continuation_release(message_args->continuation);
+        aws_event_stream_rpc_client_continuation_release(message_args->continuation, 6);
     }
 
     aws_event_stream_message_clean_up(&message_args->message);
@@ -517,7 +520,7 @@ static int s_send_protocol_message(
             (void *)connection,
             (void *)continuation);
         args->continuation = continuation;
-        aws_event_stream_rpc_client_continuation_acquire(continuation);
+        aws_event_stream_rpc_client_continuation_acquire(continuation, 2);
 
         if (message_args->message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
             AWS_LOGF_DEBUG(
@@ -771,9 +774,9 @@ static void s_route_message_by_type(
         aws_mutex_unlock(&connection->stream_lock);
 
         continuation = continuation_element->value;
-        aws_event_stream_rpc_client_continuation_acquire(continuation);
+        aws_event_stream_rpc_client_continuation_acquire(continuation, 3);
         continuation->continuation_fn(continuation, &message_args, continuation->user_data);
-        aws_event_stream_rpc_client_continuation_release(continuation);
+        aws_event_stream_rpc_client_continuation_release(continuation, 4);
 
         /* if it was a terminal stream message purge it from the hash table. The delete will decref the continuation. */
         if (message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
@@ -915,6 +918,8 @@ struct aws_event_stream_rpc_client_continuation_token *aws_event_stream_rpc_clie
     aws_event_stream_rpc_client_connection_acquire(continuation->connection);
     aws_atomic_init_int(&continuation->ref_count, 1);
     aws_atomic_init_int(&continuation->is_closed, 0);
+    aws_atomic_init_int(&continuation->ref_tracking_index, 0);
+
     continuation->continuation_fn = continuation_options->on_continuation;
     continuation->closed_fn = continuation_options->on_continuation_closed;
     continuation->user_data = continuation_options->user_data;
@@ -928,11 +933,15 @@ void *aws_event_stream_rpc_client_continuation_get_user_data(
 }
 
 void aws_event_stream_rpc_client_continuation_acquire(
-    const struct aws_event_stream_rpc_client_continuation_token *continuation) {
-    size_t current_count = aws_atomic_fetch_add_explicit(
-        &((struct aws_event_stream_rpc_client_continuation_token *)continuation)->ref_count,
-        1u,
-        aws_memory_order_relaxed);
+    struct aws_event_stream_rpc_client_continuation_token *continuation,
+    uint8_t ref_tracking_key) {
+
+    size_t next_tracking_index = aws_atomic_fetch_add(&continuation->ref_tracking_index, 1u);
+    if (next_tracking_index < AWS_ARRAY_SIZE(continuation->ref_tracking_buffer)) {
+        continuation->ref_tracking_buffer[next_tracking_index] = ref_tracking_key;
+    }
+
+    size_t current_count = aws_atomic_fetch_add_explicit(&continuation->ref_count, 1u, aws_memory_order_relaxed);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: continuation acquired, new ref count is %zu.",
@@ -941,14 +950,18 @@ void aws_event_stream_rpc_client_continuation_acquire(
 }
 
 void aws_event_stream_rpc_client_continuation_release(
-    const struct aws_event_stream_rpc_client_continuation_token *continuation) {
+    struct aws_event_stream_rpc_client_continuation_token *continuation,
+    uint8_t ref_tracking_key) {
     if (AWS_UNLIKELY(!continuation)) {
         return;
     }
 
-    struct aws_event_stream_rpc_client_continuation_token *continuation_mut =
-        (struct aws_event_stream_rpc_client_continuation_token *)continuation;
-    size_t ref_count = aws_atomic_fetch_sub_explicit(&continuation_mut->ref_count, 1, aws_memory_order_seq_cst);
+    size_t next_tracking_index = aws_atomic_fetch_add(&continuation->ref_tracking_index, 1u);
+    if (next_tracking_index < AWS_ARRAY_SIZE(continuation->ref_tracking_buffer)) {
+        continuation->ref_tracking_buffer[next_tracking_index] = ref_tracking_key;
+    }
+
+    size_t ref_count = aws_atomic_fetch_sub_explicit(&continuation->ref_count, 1, aws_memory_order_seq_cst);
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
@@ -959,9 +972,9 @@ void aws_event_stream_rpc_client_continuation_release(
     AWS_FATAL_ASSERT(ref_count != 0 && "Continuation ref count has gone negative");
 
     if (ref_count == 1) {
-        struct aws_allocator *allocator = continuation_mut->connection->allocator;
-        aws_event_stream_rpc_client_connection_release(continuation_mut->connection);
-        aws_mem_release(allocator, continuation_mut);
+        struct aws_allocator *allocator = continuation->connection->allocator;
+        aws_event_stream_rpc_client_connection_release(continuation->connection);
+        aws_mem_release(allocator, continuation);
     }
 }
 
@@ -1036,7 +1049,7 @@ int aws_event_stream_rpc_client_continuation_activate(
     }
 
     /* The continuation table gets a ref count on the continuation. Take it here. */
-    aws_event_stream_rpc_client_continuation_acquire(continuation);
+    aws_event_stream_rpc_client_continuation_acquire(continuation, 1);
 
     continuation->connection->latest_stream_id = continuation->stream_id;
     ret_val = AWS_OP_SUCCESS;

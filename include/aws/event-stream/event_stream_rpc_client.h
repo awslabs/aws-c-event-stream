@@ -152,9 +152,11 @@ AWS_EVENT_STREAM_API struct aws_event_stream_rpc_client_continuation_token *
         struct aws_event_stream_rpc_client_connection *connection,
         const struct aws_event_stream_rpc_client_stream_continuation_options *continuation_options);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_continuation_acquire(
-    const struct aws_event_stream_rpc_client_continuation_token *continuation);
+    struct aws_event_stream_rpc_client_continuation_token *continuation,
+    uint8_t ref_tracking_key);
 AWS_EVENT_STREAM_API void aws_event_stream_rpc_client_continuation_release(
-    const struct aws_event_stream_rpc_client_continuation_token *continuation);
+    struct aws_event_stream_rpc_client_continuation_token *continuation,
+    uint8_t ref_tracking_key);
 
 /**
  * returns true if the continuation has been closed.

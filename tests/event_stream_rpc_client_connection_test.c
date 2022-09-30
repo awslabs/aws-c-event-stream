@@ -953,7 +953,7 @@ static int s_test_event_stream_rpc_client_connection_continuation_flow(struct aw
     ASSERT_INT_EQUALS(AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR, client_test_data.received_message_type);
 
     aws_byte_buf_clean_up(&client_test_data.received_payload);
-    aws_event_stream_rpc_client_continuation_release(client_token);
+    aws_event_stream_rpc_client_continuation_release(client_token, 0);
 
     aws_event_stream_rpc_client_connection_close(test_data->client_connection, AWS_ERROR_SUCCESS);
     aws_event_stream_rpc_server_connection_close(test_data->server_connection, AWS_ERROR_SUCCESS);
@@ -1073,7 +1073,7 @@ static int s_test_event_stream_rpc_client_connection_unactivated_continuation_fa
         aws_event_stream_rpc_client_continuation_send_message(
             client_token, &operation_args, s_rpc_client_message_flush, &client_test_data));
 
-    aws_event_stream_rpc_client_continuation_release(client_token);
+    aws_event_stream_rpc_client_continuation_release(client_token, 0);
 
     aws_event_stream_rpc_client_connection_close(test_data->client_connection, AWS_ERROR_SUCCESS);
     aws_event_stream_rpc_server_connection_close(test_data->server_connection, AWS_ERROR_SUCCESS);
@@ -1264,7 +1264,7 @@ static int s_test_event_stream_rpc_client_connection_continuation_send_message_o
         aws_event_stream_rpc_client_continuation_send_message(
             client_token, &operation_args, s_rpc_client_message_flush, &client_test_data));
 
-    aws_event_stream_rpc_client_continuation_release(client_token);
+    aws_event_stream_rpc_client_continuation_release(client_token, 0);
 
     aws_event_stream_rpc_client_connection_close(test_data->client_connection, AWS_ERROR_SUCCESS);
     aws_event_stream_rpc_server_connection_close(test_data->server_connection, AWS_ERROR_SUCCESS);
@@ -1394,7 +1394,7 @@ static int s_test_event_stream_rpc_client_connection_continuation_duplicated_act
         aws_event_stream_rpc_client_continuation_activate(
             client_token, operation_name, &operation_args, s_rpc_client_message_flush, client_test_data));
 
-    aws_event_stream_rpc_client_continuation_release(client_token);
+    aws_event_stream_rpc_client_continuation_release(client_token, 0);
 
     aws_event_stream_rpc_client_connection_close(test_data->client_connection, AWS_ERROR_SUCCESS);
     aws_event_stream_rpc_server_connection_close(test_data->server_connection, AWS_ERROR_SUCCESS);
