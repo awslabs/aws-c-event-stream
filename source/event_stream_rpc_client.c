@@ -768,10 +768,12 @@ static void s_route_message_by_type(
             return;
         }
 
-        aws_mutex_unlock(&connection->stream_lock);
-
         continuation = continuation_element->value;
         aws_event_stream_rpc_client_continuation_acquire(continuation);
+
+        aws_mutex_unlock(&connection->stream_lock);
+
+        AWS_FATAL_ASSERT(continuation != NULL);
         continuation->continuation_fn(continuation, &message_args, continuation->user_data);
         aws_event_stream_rpc_client_continuation_release(continuation);
 
