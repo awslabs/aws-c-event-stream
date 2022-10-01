@@ -160,9 +160,6 @@ static int s_fixture_setup_shared(
         };
 
         test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
-        if (!test_data->listener) {
-            ASSERT_INT_EQUALS(AWS_IO_SOCKET_ADDRESS_IN_USE, aws_last_error());
-        }
     }
 
     test_data->allocator = allocator;
