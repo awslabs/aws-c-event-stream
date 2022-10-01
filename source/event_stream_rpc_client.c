@@ -322,8 +322,8 @@ error:
 
 void aws_event_stream_rpc_client_connection_acquire(const struct aws_event_stream_rpc_client_connection *connection) {
     AWS_PRECONDITION(connection);
-    size_t current_count = aws_atomic_fetch_add_explicit(
-        &((struct aws_event_stream_rpc_client_connection *)connection)->ref_count, 1, aws_memory_order_seq_cst);
+    size_t current_count =
+        aws_atomic_fetch_add(&((struct aws_event_stream_rpc_client_connection *)connection)->ref_count, 1);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: connection acquired, new ref count is %zu.",
@@ -345,7 +345,7 @@ void aws_event_stream_rpc_client_connection_release(const struct aws_event_strea
 
     struct aws_event_stream_rpc_client_connection *connection_mut =
         (struct aws_event_stream_rpc_client_connection *)connection;
-    size_t ref_count = aws_atomic_fetch_sub_explicit(&connection_mut->ref_count, 1, aws_memory_order_seq_cst);
+    size_t ref_count = aws_atomic_fetch_sub(&connection_mut->ref_count, 1);
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
@@ -931,10 +931,8 @@ void *aws_event_stream_rpc_client_continuation_get_user_data(
 
 void aws_event_stream_rpc_client_continuation_acquire(
     const struct aws_event_stream_rpc_client_continuation_token *continuation) {
-    size_t current_count = aws_atomic_fetch_add_explicit(
-        &((struct aws_event_stream_rpc_client_continuation_token *)continuation)->ref_count,
-        1u,
-        aws_memory_order_seq_cst);
+    size_t current_count =
+        aws_atomic_fetch_add(&((struct aws_event_stream_rpc_client_continuation_token *)continuation)->ref_count, 1u);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: continuation acquired, new ref count is %zu.",
@@ -950,22 +948,13 @@ void aws_event_stream_rpc_client_continuation_release(
 
     struct aws_event_stream_rpc_client_continuation_token *continuation_mut =
         (struct aws_event_stream_rpc_client_continuation_token *)continuation;
-    size_t ref_count = aws_atomic_fetch_sub_explicit(&continuation_mut->ref_count, 1, aws_memory_order_seq_cst);
+    size_t ref_count = aws_atomic_fetch_sub(&continuation_mut->ref_count, 1);
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_CLIENT,
         "id=%p: continuation released, new ref count is %zu.",
         (void *)continuation,
         ref_count - 1);
-
-    if (ref_count <= 0) {
-        bool done = false;
-        while (!done) {
-            ;
-        }
-
-        return;
-    }
 
     AWS_FATAL_ASSERT(ref_count != 0 && "Continuation ref count has gone negative");
 

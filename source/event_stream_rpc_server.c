@@ -227,7 +227,7 @@ struct aws_event_stream_rpc_server_connection *aws_event_stream_rpc_server_conne
 }
 
 void aws_event_stream_rpc_server_connection_acquire(struct aws_event_stream_rpc_server_connection *connection) {
-    size_t current_count = aws_atomic_fetch_add_explicit(&connection->ref_count, 1, aws_memory_order_relaxed);
+    size_t current_count = aws_atomic_fetch_add(&connection->ref_count, 1);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_SERVER,
         "id=%p: connection acquired, new ref count is %zu.",
@@ -240,7 +240,7 @@ void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_
         return;
     }
 
-    size_t value = aws_atomic_fetch_sub_explicit(&connection->ref_count, 1, aws_memory_order_seq_cst);
+    size_t value = aws_atomic_fetch_sub(&connection->ref_count, 1);
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_SERVER,
@@ -447,7 +447,7 @@ uint16_t aws_event_stream_rpc_server_listener_get_bound_port(
 }
 
 void aws_event_stream_rpc_server_listener_acquire(struct aws_event_stream_rpc_server_listener *server) {
-    size_t current_count = aws_atomic_fetch_add_explicit(&server->ref_count, 1, aws_memory_order_relaxed);
+    size_t current_count = aws_atomic_fetch_add(&server->ref_count, 1);
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_SERVER,
@@ -469,7 +469,7 @@ void aws_event_stream_rpc_server_listener_release(struct aws_event_stream_rpc_se
         return;
     }
 
-    size_t ref_count = aws_atomic_fetch_sub_explicit(&server->ref_count, 1, aws_memory_order_seq_cst);
+    size_t ref_count = aws_atomic_fetch_sub(&server->ref_count, 1);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: server released, new ref count is %zu.", (void *)server, ref_count - 1);
 
@@ -753,7 +753,7 @@ bool aws_event_stream_rpc_server_connection_is_open(struct aws_event_stream_rpc_
 
 void aws_event_stream_rpc_server_continuation_acquire(
     struct aws_event_stream_rpc_server_continuation_token *continuation) {
-    size_t current_count = aws_atomic_fetch_add_explicit(&continuation->ref_count, 1, aws_memory_order_relaxed);
+    size_t current_count = aws_atomic_fetch_add(&continuation->ref_count, 1);
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_SERVER,
         "id=%p: continuation acquired, new ref count is %zu.",
@@ -763,7 +763,7 @@ void aws_event_stream_rpc_server_continuation_acquire(
 
 void aws_event_stream_rpc_server_continuation_release(
     struct aws_event_stream_rpc_server_continuation_token *continuation) {
-    size_t value = aws_atomic_fetch_sub_explicit(&continuation->ref_count, 1, aws_memory_order_seq_cst);
+    size_t value = aws_atomic_fetch_sub(&continuation->ref_count, 1);
 
     AWS_LOGF_TRACE(
         AWS_LS_EVENT_STREAM_RPC_SERVER,
