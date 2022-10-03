@@ -322,7 +322,8 @@ static int s_fixture_setup(struct aws_allocator *allocator, void *ctx) {
 
         test_data->listener = aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
         if (!test_data->listener) {
-            ASSERT_INT_EQUALS(AWS_IO_SOCKET_ADDRESS_IN_USE, aws_last_error());
+            int error_code = aws_last_error();
+            ASSERT_TRUE(error_code == AWS_IO_SOCKET_ADDRESS_IN_USE || error_code == AWS_ERROR_NO_PERMISSION);
         }
     }
 
