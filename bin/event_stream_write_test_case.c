@@ -18,11 +18,10 @@
 #endif
 
 /**
- * 4996 is to disable unsafe function sprintf vs sprintf_s
  * 4310 is to disable type casting to smaller type at line 215, which is needed to avoid gcc overflow warning when casting int to int8_t
  */
 #ifdef _MSC_VER
-#pragma warning (disable: 4996 4310)
+#pragma warning (disable: 4310)
 #endif
 
 static void write_negative_test_case(
@@ -35,11 +34,13 @@ static void write_negative_test_case(
     size_t encoded_len = strlen("encoded") + strlen("negative") + strlen(test_name) + 2;
     size_t decoded_len = strlen("decoded") + strlen("negative") + strlen(test_name) + 2;
 
-    char *enc_output_file = (char *)malloc(dir_len + 1 + encoded_len + 1);
-    sprintf(enc_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "encoded", DELIM, "negative", DELIM, test_name);
+    size_t enc_output_file_size = dir_len + 1 + encoded_len + 1;
+    char *enc_output_file = (char *)malloc(enc_output_file_size);
+    snprintf(enc_output_file, enc_output_file_size, "%s%s%s%s%s%s%s", root_dir, DELIM, "encoded", DELIM, "negative", DELIM, test_name);
 
-    char *dec_output_file = (char *)malloc(dir_len + 1 + decoded_len + 1);
-    sprintf(dec_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "decoded", DELIM, "negative", DELIM, test_name);
+    size_t dec_output_file_size = dir_len + 1 + decoded_len + 1;
+    char *dec_output_file = (char *)malloc(dec_output_file_size);
+    snprintf(dec_output_file, dec_output_file_size, "%s%s%s%s%s%s%s", root_dir, DELIM, "decoded", DELIM, "negative", DELIM, test_name);
 
     FILE *enc = fopen(enc_output_file, "w");
     if (!enc) {
@@ -75,11 +76,13 @@ static void write_positive_test_case(
     size_t encoded_len = strlen("encoded") + strlen("positive") + strlen(test_name) + 2;
     size_t decoded_len = strlen("decoded") + strlen("positive") + strlen(test_name) + 2;
 
-    char *enc_output_file = (char *)malloc(dir_len + 1 + encoded_len + 1);
-    sprintf(enc_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "encoded", DELIM, "positive", DELIM, test_name);
+    size_t enc_output_file_size = dir_len + 1 + encoded_len + 1;
+    char *enc_output_file = (char *)malloc(enc_output_file_size);
+    snprintf(enc_output_file, enc_output_file_size, "%s%s%s%s%s%s%s", root_dir, DELIM, "encoded", DELIM, "positive", DELIM, test_name);
 
-    char *dec_output_file = (char *)malloc(dir_len + 1 + decoded_len + 1);
-    sprintf(dec_output_file, "%s%s%s%s%s%s%s", root_dir, DELIM, "decoded", DELIM, "positive", DELIM, test_name);
+    size_t dec_output_file_size = dir_len + 1 + decoded_len + 1;
+    char *dec_output_file = (char *)malloc(dec_output_file_size);
+    snprintf(dec_output_file, dec_output_file_size, "%s%s%s%s%s%s%s", root_dir, DELIM, "decoded", DELIM, "positive", DELIM, test_name);
 
     FILE *enc = fopen(enc_output_file, "w");
     if (!enc) {
