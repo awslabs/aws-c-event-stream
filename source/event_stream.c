@@ -321,8 +321,8 @@ int aws_event_stream_read_headers_from_buffer(
 int aws_event_stream_message_init(
     struct aws_event_stream_message *message,
     struct aws_allocator *alloc,
-    struct aws_array_list *headers,
-    struct aws_byte_buf *payload) {
+    const struct aws_array_list *headers,
+    const struct aws_byte_buf *payload) {
     AWS_FATAL_PRECONDITION(message);
     AWS_FATAL_PRECONDITION(alloc);
 
@@ -1013,35 +1013,15 @@ static int s_read_header_value(
     size_t length_read = current_pos - decoder->current_header_value_offset;
     struct aws_event_stream_header_value_pair *current_header = &decoder->current_header;
 
-    if (!length_read) {
-        /* save an allocation, this can only happen if the data we were handed is larger than the length of the header
-         * value. we don't really need to handle offsets in this case. This expects the user is living by the contract
-         * that they cannot act like they own this memory beyond the lifetime of their callback, and they should not
-         * mutate it */
-        if (len >= current_header->header_value_len) {
-            /* this part works regardless of type since the layout of the union will line up. */
-            current_header->header_value.variable_len_val = (uint8_t *)data;
-            current_header->value_owned = 0;
-            decoder->on_header(decoder, &decoder->prelude, &decoder->current_header, decoder->user_context);
-            *processed += current_header->header_value_len;
-            decoder->message_pos += current_header->header_value_len;
-            decoder->running_crc =
-                aws_checksums_crc32(data, (int)current_header->header_value_len, decoder->running_crc);
+    /* a possible optimization later would be to only allocate this once, and then keep reusing the same buffer. for
+     * subsequent messages.*/
+    if (!length_read && (current_header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF ||
+                         current_header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING)) {
 
-            s_reset_header_state(decoder, 1);
-            decoder->state = s_headers_state;
-            return AWS_OP_SUCCESS;
-        }
+        current_header->header_value.variable_len_val =
+            aws_mem_acquire(decoder->alloc, decoder->current_header.header_value_len);
 
-        /* a possible optimization later would be to only allocate this once, and then keep reusing the same buffer. for
-         * subsequent messages.*/
-        if (current_header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF ||
-            current_header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING) {
-            current_header->header_value.variable_len_val =
-                aws_mem_acquire(decoder->alloc, decoder->current_header.header_value_len);
-
-            current_header->value_owned = 1;
-        }
+        current_header->value_owned = 1;
     }
 
     size_t max_read =
@@ -1111,7 +1091,7 @@ static int s_read_header_type(
     decoder->current_header_value_offset++;
     struct aws_event_stream_header_value_pair *current_header = &decoder->current_header;
 
-    if (type >= AWS_EVENT_STREAM_HEADER_BOOL_FALSE && type <= AWS_EVENT_STREAM_HEADER_UUID) {
+    if (type >= AWS_EVENT_STREAM_HEADER_BOOL_TRUE && type <= AWS_EVENT_STREAM_HEADER_UUID) {
         current_header->header_value_type = (enum aws_event_stream_header_value_type)type;
 
         switch (type) {
@@ -1124,12 +1104,14 @@ static int s_read_header_type(
                 current_header->header_value.static_val[0] = 0;
                 decoder->on_header(decoder, &decoder->prelude, current_header, decoder->user_context);
                 s_reset_header_state(decoder, 1);
+                decoder->state = s_headers_state;
                 break;
             case AWS_EVENT_STREAM_HEADER_BOOL_TRUE:
                 current_header->header_value_len = 0;
                 current_header->header_value.static_val[0] = 1;
                 decoder->on_header(decoder, &decoder->prelude, current_header, decoder->user_context);
                 s_reset_header_state(decoder, 1);
+                decoder->state = s_headers_state;
                 break;
             case AWS_EVENT_STREAM_HEADER_BYTE:
                 current_header->header_value_len = 1;

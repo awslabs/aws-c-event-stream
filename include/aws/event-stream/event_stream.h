@@ -167,8 +167,8 @@ AWS_EXTERN_C_BEGIN
 AWS_EVENT_STREAM_API int aws_event_stream_message_init(
     struct aws_event_stream_message *message,
     struct aws_allocator *alloc,
-    struct aws_array_list *headers,
-    struct aws_byte_buf *payload);
+    const struct aws_array_list *headers,
+    const struct aws_byte_buf *payload);
 
 /**
  * Zero allocation, Zero copy. The message will simply wrap the buffer. The message functions are only useful as long as
