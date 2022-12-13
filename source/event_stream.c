@@ -1013,8 +1013,6 @@ static int s_read_header_value(
     size_t length_read = current_pos - decoder->current_header_value_offset;
     struct aws_event_stream_header_value_pair *current_header = &decoder->current_header;
 
-    /* a possible optimization later would be to only allocate this once, and then keep reusing the same buffer. for
-     * subsequent messages.*/
     if (!length_read && (current_header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF ||
                          current_header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING)) {
         /* save an allocation, this can only happen if the data we were handed is larger than the length of the header
@@ -1036,6 +1034,8 @@ static int s_read_header_value(
             return AWS_OP_SUCCESS;
         }
 
+        /* a possible optimization later would be to only allocate this once, and then keep reusing the same buffer. for
+         * subsequent messages.*/
         current_header->header_value.variable_len_val =
             aws_mem_acquire(decoder->alloc, decoder->current_header.header_value_len);
 
