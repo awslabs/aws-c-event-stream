@@ -1091,57 +1091,53 @@ static int s_read_header_type(
     decoder->current_header_value_offset++;
     struct aws_event_stream_header_value_pair *current_header = &decoder->current_header;
 
-    if (type >= AWS_EVENT_STREAM_HEADER_BOOL_TRUE && type <= AWS_EVENT_STREAM_HEADER_UUID) {
-        current_header->header_value_type = (enum aws_event_stream_header_value_type)type;
+    current_header->header_value_type = (enum aws_event_stream_header_value_type)type;
 
-        switch (type) {
-            case AWS_EVENT_STREAM_HEADER_STRING:
-            case AWS_EVENT_STREAM_HEADER_BYTE_BUF:
-                decoder->state = s_read_header_value_len;
-                break;
-            case AWS_EVENT_STREAM_HEADER_BOOL_FALSE:
-                current_header->header_value_len = 0;
-                current_header->header_value.static_val[0] = 0;
-                decoder->on_header(decoder, &decoder->prelude, current_header, decoder->user_context);
-                s_reset_header_state(decoder, 1);
-                decoder->state = s_headers_state;
-                break;
-            case AWS_EVENT_STREAM_HEADER_BOOL_TRUE:
-                current_header->header_value_len = 0;
-                current_header->header_value.static_val[0] = 1;
-                decoder->on_header(decoder, &decoder->prelude, current_header, decoder->user_context);
-                s_reset_header_state(decoder, 1);
-                decoder->state = s_headers_state;
-                break;
-            case AWS_EVENT_STREAM_HEADER_BYTE:
-                current_header->header_value_len = 1;
-                decoder->state = s_read_header_value;
-                break;
-            case AWS_EVENT_STREAM_HEADER_INT16:
-                current_header->header_value_len = sizeof(uint16_t);
-                decoder->state = s_read_header_value;
-                break;
-            case AWS_EVENT_STREAM_HEADER_INT32:
-                current_header->header_value_len = sizeof(uint32_t);
-                decoder->state = s_read_header_value;
-                break;
-            case AWS_EVENT_STREAM_HEADER_INT64:
-            case AWS_EVENT_STREAM_HEADER_TIMESTAMP:
-                current_header->header_value_len = sizeof(uint64_t);
-                decoder->state = s_read_header_value;
-                break;
-            case AWS_EVENT_STREAM_HEADER_UUID:
-                current_header->header_value_len = 16;
-                decoder->state = s_read_header_value;
-                break;
-            default:
-                return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE);
-        }
-
-        return AWS_OP_SUCCESS;
+    switch (type) {
+        case AWS_EVENT_STREAM_HEADER_STRING:
+        case AWS_EVENT_STREAM_HEADER_BYTE_BUF:
+            decoder->state = s_read_header_value_len;
+            break;
+        case AWS_EVENT_STREAM_HEADER_BOOL_FALSE:
+            current_header->header_value_len = 0;
+            current_header->header_value.static_val[0] = 0;
+            decoder->on_header(decoder, &decoder->prelude, current_header, decoder->user_context);
+            s_reset_header_state(decoder, 1);
+            decoder->state = s_headers_state;
+            break;
+        case AWS_EVENT_STREAM_HEADER_BOOL_TRUE:
+            current_header->header_value_len = 0;
+            current_header->header_value.static_val[0] = 1;
+            decoder->on_header(decoder, &decoder->prelude, current_header, decoder->user_context);
+            s_reset_header_state(decoder, 1);
+            decoder->state = s_headers_state;
+            break;
+        case AWS_EVENT_STREAM_HEADER_BYTE:
+            current_header->header_value_len = 1;
+            decoder->state = s_read_header_value;
+            break;
+        case AWS_EVENT_STREAM_HEADER_INT16:
+            current_header->header_value_len = sizeof(uint16_t);
+            decoder->state = s_read_header_value;
+            break;
+        case AWS_EVENT_STREAM_HEADER_INT32:
+            current_header->header_value_len = sizeof(uint32_t);
+            decoder->state = s_read_header_value;
+            break;
+        case AWS_EVENT_STREAM_HEADER_INT64:
+        case AWS_EVENT_STREAM_HEADER_TIMESTAMP:
+            current_header->header_value_len = sizeof(uint64_t);
+            decoder->state = s_read_header_value;
+            break;
+        case AWS_EVENT_STREAM_HEADER_UUID:
+            current_header->header_value_len = 16;
+            decoder->state = s_read_header_value;
+            break;
+        default:
+            return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE);
     }
 
-    return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE);
+    return AWS_OP_SUCCESS;
 }
 
 static int s_read_header_name(
