@@ -282,15 +282,15 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
     void *ctx) {
     (void)ctx;
     /* clang-format off */
-    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1e, // total length
-                           0x00, 0x00, 0x00, 0x0e, // headers length
-                           0x5d, 0x4a, 0xdb, 0x8d, // prelude crc
-                           0x08, // header name length
-                           'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', // header name
-                           0x04, // header value type
-                           0x00, 0x00, // header value string length
-                           0x00, 0x20, // header value
-                           0x2a, 0x4f, 0xb0, 0xea // message crc
+    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1e, /* total length */
+                           0x00, 0x00, 0x00, 0x0e, /* headers length */
+                           0x5d, 0x4a, 0xdb, 0x8d, /* prelude crc */
+                           0x08, /* header name length */
+                           'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', /* header name */
+                           0x04, /* header value type */
+                           0x00, 0x00, /* header value length */
+                           0x00, 0x20, /* header value */
+                           0x2a, 0x4f, 0xb0, 0xea /* message crc */
                           };
     /* clang-format on */
 
@@ -350,13 +350,13 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
     void *ctx) {
     (void)ctx;
     /* clang-format off */
-    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1a, // total length
-                           0x00, 0x00, 0x00, 0x0a, // headers length
-                           0xaf, 0xa7, 0xb9, 0x54, // prelude crc
-                           0x08, // header name length
-                           'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', // header name
-                            0x00, // payload
-                            0x6a, 0x44, 0x14, 0xad // message crc
+    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1a, /* total length */
+                           0x00, 0x00, 0x00, 0x0a, /* headers length */
+                           0xaf, 0xa7, 0xb9, 0x54, /* prelude crc */
+                           0x08, /* header name length */
+                           'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', /* header name */
+                            0x00, /* payload */
+                            0x6a, 0x44, 0x14, 0xad /* message crc */
                           };
     /* clang-format on */
 
