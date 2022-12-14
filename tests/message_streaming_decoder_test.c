@@ -4,7 +4,6 @@
  */
 
 #include <aws/common/array_list.h>
-#include <aws/common/encoding.h>
 #include <aws/event-stream/event_stream.h>
 #include <aws/testing/aws_test_harness.h>
 
