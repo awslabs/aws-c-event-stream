@@ -1415,10 +1415,13 @@ static int s_start_state(
 }
 
 static void s_reset_state(struct aws_event_stream_streaming_decoder *decoder) {
-    decoder->message_pos = 0;
-    decoder->prelude = s_empty_prelude;
-    decoder->running_crc = 0;
     memset(decoder->working_buffer, 0, sizeof(decoder->working_buffer));
+    decoder->message_pos = 0;
+    decoder->running_crc = 0;
+    decoder->current_header_name_offset = 0;
+    decoder->current_header_value_offset = 0;
+    AWS_ZERO_STRUCT(decoder->current_header);
+    decoder->prelude = s_empty_prelude;
     decoder->state = s_start_state;
 }
 
