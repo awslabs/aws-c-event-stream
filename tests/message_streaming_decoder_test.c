@@ -282,15 +282,15 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
     (void)ctx;
     /* clang-format off */
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x1e, /* total length */
-        0x00, 0x00, 0x00, 0x0e, /* headers length */
-        0x5d, 0x4a, 0xdb, 0x8d, /* prelude crc */
-        0x08, /* header name length */
-        'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', /* header name */
-        0x04, /* header value type */
-        0x00, 0x00, /* header value length */
-        0x00, 0x20, /* header value */
-        0x2a, 0x4f, 0xb0, 0xea /* message crc */
+        0x00, 0x00, 0x00, 0x1e,         /* total length */
+        0x00, 0x00, 0x00, 0x0e,         /* headers length */
+        0x5d, 0x4a, 0xdb, 0x8d,         /* prelude crc */
+        0x05,                           /* header name length */
+        'e',  'v',  'e',  'n',  't',    /* header name */
+        0x04,                           /* header value type */
+        0x00, 0x00,                     /* header value length */
+        0x00, 0x20,                     /* header value */
+        0x2a, 0x4f, 0xb0, 0xea          /* message crc */
     };
     /* clang-format on */
 
@@ -322,7 +322,7 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
     ASSERT_INT_EQUALS(0x0000000E, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0xE");
     ASSERT_INT_EQUALS(0x5D4ADB8D, decoder_data.latest_prelude.prelude_crc, "Prelude CRC should have been 0x5D4ADB8D");
 
-    const char *expected_header_name = "event-id";
+    const char *expected_header_name = "event";
     struct aws_event_stream_header_value_pair latest_header;
     aws_array_list_get_at(&decoder_data.headers_list, &latest_header, 0);
 
@@ -351,13 +351,13 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
     (void)ctx;
     /* clang-format off */
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x1a, /* total length */
-        0x00, 0x00, 0x00, 0x0a, /* headers length */
-        0xaf, 0xa7, 0xb9, 0x54, /* prelude crc */
-        0x08, /* header name length */
-        'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', /* header name */
-        0x00, /* header value type */
-        0x6a, 0x44, 0x14, 0xad /* message crc */
+        0x00, 0x00, 0x00, 0x1a,         /* total length */
+        0x00, 0x00, 0x00, 0x0a,         /* headers length */
+        0xaf, 0xa7, 0xb9, 0x54,         /* prelude crc */
+        0x05,                           /* header name length */
+        'e',  'v',  'e',  'n',  't',    /* header name */
+        0x00,                           /* header value type */
+        0x6a, 0x44, 0x14, 0xad          /* message crc */
     };
     /* clang-format on */
 
@@ -389,7 +389,7 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
     ASSERT_INT_EQUALS(0x0000000A, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0xA");
     ASSERT_INT_EQUALS(0xAFA7B954, decoder_data.latest_prelude.prelude_crc, "Prelude CRC should have been 0xAFA7B954");
 
-    const char *expected_header_name = "event-id";
+    const char *expected_header_name = "event";
     struct aws_event_stream_header_value_pair latest_header;
     aws_array_list_get_at(&decoder_data.headers_list, &latest_header, 0);
 
