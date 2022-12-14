@@ -357,7 +357,7 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
         0xaf, 0xa7, 0xb9, 0x54, /* prelude crc */
         0x08, /* header name length */
         'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', /* header name */
-        0x00, /* payload */
+        0x00, /* header value type */
         0x6a, 0x44, 0x14, 0xad /* message crc */
     };
     /* clang-format on */
