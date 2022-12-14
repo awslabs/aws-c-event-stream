@@ -79,13 +79,14 @@ enum aws_event_stream_header_value_type {
 };
 
 static const uint16_t UUID_LEN = 16U;
+static const size_t AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX = 16;
 struct aws_event_stream_header_value_pair {
     uint8_t header_name_len;
     char header_name[INT8_MAX];
     enum aws_event_stream_header_value_type header_value_type;
     union {
         uint8_t *variable_len_val;
-        uint8_t static_val[16];
+        uint8_t static_val[AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX];
     } header_value;
 
     uint16_t header_value_len;
@@ -400,6 +401,14 @@ AWS_EVENT_STREAM_API int aws_event_stream_add_uuid_header(
     const char *name,
     uint8_t name_len,
     const uint8_t *value);
+
+/**
+ * Adds a generic header to the list of headers.
+ * Makes a copy of the underlaying data.
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_header(
+    struct aws_array_list *headers,
+    const struct aws_event_stream_header_value_pair *header);
 
 /**
  * Returns the header name. Note: this value is not null terminated

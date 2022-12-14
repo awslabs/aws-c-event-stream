@@ -921,6 +921,35 @@ int aws_event_stream_add_uuid_header(
     return aws_array_list_push_back(headers, (void *)&header);
 }
 
+int aws_event_stream_add_header(
+    struct aws_array_list *headers,
+    const struct aws_event_stream_header_value_pair *header) {
+    AWS_FATAL_PRECONDITION(headers);
+    AWS_FATAL_PRECONDITION(header);
+
+    struct aws_event_stream_header_value_pair copy_header = *header;
+
+    if (header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING ||
+        header->header_value_type == AWS_EVENT_STREAM_HEADER_BYTE_BUF) {
+        return s_add_variable_len_header(
+            headers,
+            &copy_header,
+            header->header_name,
+            header->header_name_len,
+            header->header_value.variable_len_val,
+            header->header_value_len,
+            1); // Copy the header value
+
+    } else {
+        memcpy((void *)copy_header.header_name, (void *)header->header_name, (size_t)header->header_name_len);
+        memcpy(
+            (void *)copy_header.header_value.static_val,
+            (void *)header->header_value.static_val,
+            AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX);
+    }
+    return aws_array_list_push_back(headers, (void *)&copy_header);
+}
+
 struct aws_byte_buf aws_event_stream_header_name(struct aws_event_stream_header_value_pair *header) {
     AWS_FATAL_PRECONDITION(header);
 
