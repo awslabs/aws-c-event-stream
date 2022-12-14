@@ -939,14 +939,13 @@ int aws_event_stream_add_header(
             header->header_value.variable_len_val,
             header->header_value_len,
             1); /* Copy the header value */
-
-    } else {
-        memcpy((void *)header_copy.header_name, (void *)header->header_name, (size_t)header->header_name_len);
-        memcpy(
-            (void *)header_copy.header_value.static_val,
-            (void *)header->header_value.static_val,
-            AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX);
     }
+
+    memcpy((void *)header_copy.header_name, (void *)header->header_name, (size_t)header->header_name_len);
+    memcpy(
+        (void *)header_copy.header_value.static_val,
+        (void *)header->header_value.static_val,
+        AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX);
     return aws_array_list_push_back(headers, (void *)&header_copy);
 }
 
