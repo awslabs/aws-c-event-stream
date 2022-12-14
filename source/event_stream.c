@@ -1038,6 +1038,7 @@ static int s_read_header_value(
 
     size_t current_pos = decoder->message_pos;
 
+    /* amount that we've already read */
     size_t length_read = current_pos - decoder->current_header_value_offset;
     struct aws_event_stream_header_value_pair *current_header = &decoder->current_header;
 
