@@ -23,6 +23,9 @@
 /* Max header name length is 127 bytes */
 #define AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX (INT8_MAX)
 
+/* Max header static value length is 16 bytes */
+#define AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX (16)
+
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_EVENT_STREAM_PACKAGE_ID),
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
@@ -85,7 +88,7 @@ struct aws_event_stream_header_value_pair {
     enum aws_event_stream_header_value_type header_value_type;
     union {
         uint8_t *variable_len_val;
-        uint8_t static_val[16];
+        uint8_t static_val[AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX];
     } header_value;
 
     uint16_t header_value_len;
@@ -167,8 +170,8 @@ AWS_EXTERN_C_BEGIN
 AWS_EVENT_STREAM_API int aws_event_stream_message_init(
     struct aws_event_stream_message *message,
     struct aws_allocator *alloc,
-    struct aws_array_list *headers,
-    struct aws_byte_buf *payload);
+    const struct aws_array_list *headers,
+    const struct aws_byte_buf *payload);
 
 /**
  * Zero allocation, Zero copy. The message will simply wrap the buffer. The message functions are only useful as long as
@@ -400,6 +403,14 @@ AWS_EVENT_STREAM_API int aws_event_stream_add_uuid_header(
     const char *name,
     uint8_t name_len,
     const uint8_t *value);
+
+/**
+ * Adds a generic header to the list of headers.
+ * Makes a copy of the underlaying data.
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_header(
+    struct aws_array_list *headers,
+    const struct aws_event_stream_header_value_pair *header);
 
 /**
  * Returns the header name. Note: this value is not null terminated
