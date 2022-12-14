@@ -281,8 +281,18 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
     struct aws_allocator *allocator,
     void *ctx) {
     (void)ctx;
-    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x0e, 0x5d, 0x4a, 0xdb, 0x8d, 0x08, 0x65, 0x76,
-                           0x65, 0x6e, 0x74, 0x2d, 0x69, 0x64, 0x04, 0x00, 0x00, 0x00, 0x20, 0x2a, 0x4f, 0xb0, 0xea};
+    /* clang-format off */
+    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1e, // total length
+                           0x00, 0x00, 0x00, 0x0e, // headers length
+                           0x5d, 0x4a, 0xdb, 0x8d, // prelude crc
+                           0x08, // header name length
+                           'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', // header name
+                           0x04, // header value type
+                           0x00, 0x00, // header value string length
+                           0x00, 0x20, // header value
+                           0x2a, 0x4f, 0xb0, 0xea // message crc
+                          };
+    /* clang-format on */
 
     struct test_decoder_data decoder_data = {
         .latest_payload = 0,
@@ -339,8 +349,16 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
     struct aws_allocator *allocator,
     void *ctx) {
     (void)ctx;
-    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1a, 0x00, 0x00, 0x00, 0x0a, 0xaf, 0xa7, 0xb9, 0x54, 0x08,
-                           0x65, 0x76, 0x65, 0x6e, 0x74, 0x2d, 0x69, 0x64, 0x00, 0x6a, 0x44, 0x14, 0xad};
+    /* clang-format off */
+    uint8_t test_data[] = {0x00, 0x00, 0x00, 0x1a, // total length
+                           0x00, 0x00, 0x00, 0x0a, // headers length
+                           0xaf, 0xa7, 0xb9, 0x54, // prelude crc
+                           0x08, // header name length
+                           'e',  'v',  'e',  'n',  't',  '-',  'i',  'd', // header name
+                            0x00, // payload
+                            0x6a, 0x44, 0x14, 0xad // message crc
+                          };
+    /* clang-format on */
 
     struct test_decoder_data decoder_data = {
         .latest_payload = 0,
