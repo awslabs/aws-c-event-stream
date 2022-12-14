@@ -110,7 +110,6 @@ static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struc
     struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
     struct aws_event_stream_streaming_decoder decoder;
-    AWS_ZERO_STRUCT(decoder);
     aws_event_stream_streaming_decoder_init(
         &decoder,
         allocator,
