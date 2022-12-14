@@ -23,6 +23,9 @@
 /* Max header name length is 127 bytes */
 #define AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX (INT8_MAX)
 
+/* Max header static value length is 16 bytes */
+#define AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX (16)
+
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_EVENT_STREAM_PACKAGE_ID),
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
@@ -79,7 +82,6 @@ enum aws_event_stream_header_value_type {
 };
 
 static const uint16_t UUID_LEN = 16U;
-static const size_t AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX = 16;
 struct aws_event_stream_header_value_pair {
     uint8_t header_name_len;
     char header_name[INT8_MAX];
