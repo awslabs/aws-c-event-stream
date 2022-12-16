@@ -1484,13 +1484,12 @@ void aws_event_stream_streaming_decoder_init(
     aws_event_stream_on_error_fn *on_error,
     void *user_data) {
 
-    s_reset_state(decoder);
-    decoder->alloc = alloc;
-    decoder->on_error = on_error;
-    decoder->on_header = on_header;
-    decoder->on_payload = on_payload_segment;
-    decoder->on_prelude = on_prelude;
-    decoder->user_context = user_data;
+    struct aws_event_stream_streaming_decoder_options decoder_options = {.on_payload_segment = on_payload_segment,
+                                                                         .on_prelude = on_prelude,
+                                                                         .on_header = on_header,
+                                                                         .on_error = on_error,
+                                                                         .user_data = user_data};
+    aws_event_stream_streaming_decoder_init_from_options(decoder, alloc, &decoder_options);
 }
 
 void aws_event_stream_streaming_decoder_clean_up(struct aws_event_stream_streaming_decoder *decoder) {
