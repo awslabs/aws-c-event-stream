@@ -66,10 +66,10 @@ static void s_decoder_test_header_received(
 
 static void s_decoder_test_on_complete(
     struct aws_event_stream_streaming_decoder *decoder,
-    uint32_t running_crc,
+    uint32_t message_crc,
     void *user_data) {
     (void)decoder;
-    (void)running_crc;
+    (void)message_crc;
     struct test_decoder_data *decoder_data = (struct test_decoder_data *)user_data;
     decoder_data->on_complete_called = true;
 }

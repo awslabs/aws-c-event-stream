@@ -138,7 +138,7 @@ typedef void(aws_event_stream_header_received_fn)(
  */
 typedef void(aws_event_stream_on_complete_fn)(
     struct aws_event_stream_streaming_decoder *decoder,
-    uint32_t running_crc,
+    uint32_t message_crc,
     void *user_data);
 
 /**
