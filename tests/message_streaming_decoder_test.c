@@ -14,6 +14,7 @@ struct test_decoder_data {
     size_t written;
     struct aws_allocator *alloc;
     int latest_error;
+    bool on_complete_called;
 };
 
 static void s_decoder_test_on_payload_segment(
@@ -63,6 +64,16 @@ static void s_decoder_test_header_received(
     aws_event_stream_add_header(&decoder_data->headers_list, header);
 }
 
+static void s_decoder_test_on_complete(
+    struct aws_event_stream_streaming_decoder *decoder,
+    uint32_t running_crc,
+    void *user_data) {
+    (void)decoder;
+    (void)running_crc;
+    struct test_decoder_data *decoder_data = (struct test_decoder_data *)user_data;
+    decoder_data->on_complete_called = true;
+}
+
 static void s_decoder_test_on_error(
     struct aws_event_stream_streaming_decoder *decoder,
     struct aws_event_stream_message_prelude *prelude,
@@ -100,15 +111,16 @@ static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struc
     (void)ctx;
     struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
+
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(
-        &decoder,
-        allocator,
-        s_decoder_test_on_payload_segment,
-        s_decoder_test_on_prelude_received,
-        s_decoder_test_header_received,
-        s_decoder_test_on_error,
-        &decoder_data);
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
     ASSERT_SUCCESS(
@@ -123,6 +135,7 @@ static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struc
     if (decoder_data.latest_payload) {
         aws_mem_release(allocator, decoder_data.latest_payload);
     }
+    ASSERT_TRUE(decoder_data.on_complete_called);
 
     aws_event_stream_streaming_decoder_clean_up(&decoder);
 
@@ -142,15 +155,16 @@ static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aw
     (void)ctx;
     struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
 
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
+
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(
-        &decoder,
-        allocator,
-        s_decoder_test_on_payload_segment,
-        s_decoder_test_on_prelude_received,
-        s_decoder_test_header_received,
-        s_decoder_test_on_error,
-        &decoder_data);
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
@@ -179,6 +193,7 @@ static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aw
     if (decoder_data.latest_payload) {
         aws_mem_release(allocator, decoder_data.latest_payload);
     }
+    ASSERT_TRUE(decoder_data.on_complete_called);
 
     aws_event_stream_streaming_decoder_clean_up(&decoder);
 
@@ -208,15 +223,16 @@ static int s_test_streaming_decoder_incoming_application_one_compressed_header_p
     };
     aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
 
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
+
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_streaming_decoder_init(
-        &decoder,
-        allocator,
-        s_decoder_test_on_payload_segment,
-        s_decoder_test_on_prelude_received,
-        s_decoder_test_header_received,
-        s_decoder_test_on_error,
-        &decoder_data);
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
@@ -267,6 +283,7 @@ static int s_test_streaming_decoder_incoming_application_one_compressed_header_p
     if (decoder_data.latest_payload) {
         aws_mem_release(allocator, decoder_data.latest_payload);
     }
+    ASSERT_TRUE(decoder_data.on_complete_called);
 
     aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
     return 0;
@@ -282,15 +299,15 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
     (void)ctx;
     /* clang-format off */
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x1e,         /* total length */
-        0x00, 0x00, 0x00, 0x0e,         /* headers length */
-        0x5d, 0x4a, 0xdb, 0x8d,         /* prelude crc */
+        0x00, 0x00, 0x00, 0x1b,         /* total length */
+        0x00, 0x00, 0x00, 0x0b,         /* headers length */
+        0xe5, 0xc0, 0xa0, 0x72,         /* prelude crc */
         0x05,                           /* header name length */
         'e',  'v',  'e',  'n',  't',    /* header name */
         0x04,                           /* header value type */
         0x00, 0x00,                     /* header value length */
         0x00, 0x20,                     /* header value */
-        0x2a, 0x4f, 0xb0, 0xea          /* message crc */
+        0x04, 0xa1, 0xd4, 0x7c          /* message crc */
     };
     /* clang-format on */
 
@@ -300,17 +317,18 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
         .alloc = allocator,
         .latest_error = 0,
     };
+    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
+
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
-    aws_event_stream_streaming_decoder_init(
-        &decoder,
-        allocator,
-        s_decoder_test_on_payload_segment,
-        s_decoder_test_on_prelude_received,
-        s_decoder_test_header_received,
-        s_decoder_test_on_error,
-        &decoder_data);
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
@@ -318,9 +336,9 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
     ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
-    ASSERT_INT_EQUALS(0x0000001E, decoder_data.latest_prelude.total_len, "Message length should have been 0x1E");
-    ASSERT_INT_EQUALS(0x0000000E, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0xE");
-    ASSERT_INT_EQUALS(0x5D4ADB8D, decoder_data.latest_prelude.prelude_crc, "Prelude CRC should have been 0x5D4ADB8D");
+    ASSERT_INT_EQUALS(0x0000001B, decoder_data.latest_prelude.total_len, "Message length should have been 0x1B");
+    ASSERT_INT_EQUALS(0x0000000B, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0xB");
+    ASSERT_INT_EQUALS(0xE5C0A072, decoder_data.latest_prelude.prelude_crc, "Prelude CRC should have been 0xE5C0A072");
 
     const char *expected_header_name = "event";
     struct aws_event_stream_header_value_pair latest_header;
@@ -336,6 +354,7 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
 
     int32_t latest_header_value = aws_event_stream_header_value_as_int32(&latest_header);
     ASSERT_INT_EQUALS(0x00000020, latest_header_value, "Header value should have been 0x00000020");
+    ASSERT_TRUE(decoder_data.on_complete_called);
 
     aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
     return 0;
@@ -351,13 +370,13 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
     (void)ctx;
     /* clang-format off */
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x1a,         /* total length */
-        0x00, 0x00, 0x00, 0x0a,         /* headers length */
-        0xaf, 0xa7, 0xb9, 0x54,         /* prelude crc */
+        0x00, 0x00, 0x00, 0x17,         /* total length */
+        0x00, 0x00, 0x00, 0x07,         /* headers length */
+        0x29, 0x86, 0x01, 0x58,         /* prelude crc */
         0x05,                           /* header name length */
         'e',  'v',  'e',  'n',  't',    /* header name */
         0x00,                           /* header value type */
-        0x6a, 0x44, 0x14, 0xad          /* message crc */
+        0x4b, 0x4d, 0x2b, 0xe7          /* message crc */
     };
     /* clang-format on */
 
@@ -367,17 +386,18 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
         .alloc = allocator,
         .latest_error = 0,
     };
+    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
+
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
-    aws_event_stream_streaming_decoder_init(
-        &decoder,
-        allocator,
-        s_decoder_test_on_payload_segment,
-        s_decoder_test_on_prelude_received,
-        s_decoder_test_header_received,
-        s_decoder_test_on_error,
-        &decoder_data);
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
@@ -385,9 +405,9 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
     ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
-    ASSERT_INT_EQUALS(0x0000001A, decoder_data.latest_prelude.total_len, "Message length should have been 0x1A");
-    ASSERT_INT_EQUALS(0x0000000A, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0xA");
-    ASSERT_INT_EQUALS(0xAFA7B954, decoder_data.latest_prelude.prelude_crc, "Prelude CRC should have been 0xAFA7B954");
+    ASSERT_INT_EQUALS(0x00000017, decoder_data.latest_prelude.total_len, "Message length should have been 0x17");
+    ASSERT_INT_EQUALS(0x00000007, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x7");
+    ASSERT_INT_EQUALS(0x29860158, decoder_data.latest_prelude.prelude_crc, "Prelude CRC should have been 0x29860158");
 
     const char *expected_header_name = "event";
     struct aws_event_stream_header_value_pair latest_header;
@@ -403,6 +423,7 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
 
     int8_t latest_header_value = aws_event_stream_header_value_as_bool(&latest_header);
     ASSERT_INT_EQUALS(1, latest_header_value, "Header value should have been true");
+    ASSERT_TRUE(decoder_data.on_complete_called);
 
     aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
     return 0;
@@ -501,17 +522,18 @@ static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_all
                                 This will fall into the middle of message boundaries and preludes. */
 
     struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
+    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
+
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
 
     struct aws_event_stream_streaming_decoder decoder;
-    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
-    aws_event_stream_streaming_decoder_init(
-        &decoder,
-        allocator,
-        s_decoder_test_on_payload_segment,
-        s_decoder_test_on_prelude_received,
-        s_decoder_test_header_received,
-        s_decoder_test_on_error,
-        &decoder_data);
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     size_t current_written = 0;
     int err_code = 0;
@@ -589,6 +611,7 @@ static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_all
 
     aws_event_stream_streaming_decoder_clean_up(&decoder);
     aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
+    ASSERT_TRUE(decoder_data.on_complete_called);
 
     return 0;
 }

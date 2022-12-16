@@ -133,6 +133,15 @@ typedef void(aws_event_stream_header_received_fn)(
     void *user_data);
 
 /**
+ * Called by aws_aws_event_stream_streaming_decoder when a message decoding is complete
+ * and crc is verified.
+ */
+typedef void(aws_event_stream_on_complete_fn)(
+    struct aws_event_stream_streaming_decoder *decoder,
+    uint32_t running_crc,
+    void *user_data);
+
+/**
  * Called by aws_aws_event_stream_streaming_decoder when an error is encountered. The decoder is not in a good state for
  * usage after this callback.
  */
@@ -156,10 +165,19 @@ struct aws_event_stream_streaming_decoder {
     aws_event_stream_process_on_payload_segment_fn *on_payload;
     aws_event_stream_prelude_received_fn *on_prelude;
     aws_event_stream_header_received_fn *on_header;
+    aws_event_stream_on_complete_fn *on_complete;
     aws_event_stream_on_error_fn *on_error;
     void *user_context;
 };
 
+struct aws_event_stream_streaming_decoder_options {
+    aws_event_stream_process_on_payload_segment_fn *on_payload_segment;
+    aws_event_stream_prelude_received_fn *on_prelude;
+    aws_event_stream_header_received_fn *on_header;
+    aws_event_stream_on_complete_fn *on_complete;
+    aws_event_stream_on_error_fn *on_error;
+    void *user_data;
+};
 AWS_EXTERN_C_BEGIN
 
 /**
@@ -278,7 +296,19 @@ AWS_EVENT_STREAM_API int aws_event_stream_read_headers_from_buffer(
     struct aws_array_list *headers,
     const uint8_t *buffer,
     size_t headers_len);
+
 /**
+ * Initialize a streaming decoder for messages with callbacks for usage
+ * and an optional user context pointer.
+ */
+AWS_EVENT_STREAM_API
+void aws_event_stream_streaming_decoder_init_from_options(
+    struct aws_event_stream_streaming_decoder *decoder,
+    struct aws_allocator *allocator,
+    const struct aws_event_stream_streaming_decoder_options *options);
+
+/**
+ * Deprecated. Use aws_event_stream_streaming_decoder_init_from_options instead.
  * Initialize a streaming decoder for messages with callbacks for usage and an optional user context pointer.
  */
 AWS_EVENT_STREAM_API void aws_event_stream_streaming_decoder_init(
