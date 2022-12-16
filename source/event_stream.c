@@ -1464,7 +1464,6 @@ void aws_event_stream_streaming_decoder_init_from_options(
     AWS_ASSERT(options->on_payload_segment);
     AWS_ASSERT(options->on_prelude);
     AWS_ASSERT(options->on_prelude);
-    AWS_ASSERT(options->on_complete);
 
     s_reset_state(decoder);
     decoder->alloc = allocator;

@@ -171,11 +171,40 @@ struct aws_event_stream_streaming_decoder {
 };
 
 struct aws_event_stream_streaming_decoder_options {
+    /**
+     * (Required)
+     * Invoked repeatedly times as payload segment are received.
+     * See `aws_event_stream_process_on_payload_segment_fn`.
+     */
     aws_event_stream_process_on_payload_segment_fn *on_payload_segment;
+    /**
+     * (Required)
+     * Invoked when when a new message has arrived. The prelude will contain metadata about the message.
+     * See `aws_event_stream_prelude_received_fn`.
+     */
     aws_event_stream_prelude_received_fn *on_prelude;
+    /**
+     * (Required)
+     * Invoked repeatedly as headers are received.
+     * See `aws_event_stream_header_received_fn`.
+     */
     aws_event_stream_header_received_fn *on_header;
+    /**
+     * (Optional)
+     * Invoked if a message is decoded successfully.
+     * See `aws_event_stream_on_complete_fn`.
+     */
     aws_event_stream_on_complete_fn *on_complete;
+    /**
+     * (Required)
+     * Invoked when an error is encountered. The decoder is not in a good state for usage after this callback.
+     * See `aws_event_stream_header_received_fn`.
+     */
     aws_event_stream_on_error_fn *on_error;
+    /**
+     * (Optional)
+     * user_data passed to callbacks.
+     */
     void *user_data;
 };
 AWS_EXTERN_C_BEGIN
