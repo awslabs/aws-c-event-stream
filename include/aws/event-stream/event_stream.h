@@ -173,7 +173,7 @@ struct aws_event_stream_streaming_decoder {
 struct aws_event_stream_streaming_decoder_options {
     /**
      * (Required)
-     * Invoked repeatedly times as payload segment are received.
+     * Invoked repeatedly as payload segment are received.
      * See `aws_event_stream_process_on_payload_segment_fn`.
      */
     aws_event_stream_process_on_payload_segment_fn *on_payload_segment;
