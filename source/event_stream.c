@@ -1293,6 +1293,9 @@ static int s_read_trailer_state(
         uint32_t message_crc = aws_read_u32(decoder->working_buffer);
 
         if (message_crc == decoder->running_crc) {
+            if (decoder->on_complete) {
+                decoder->on_complete(decoder, message_crc, decoder->user_context);
+            }
             s_reset_state(decoder);
         } else {
             char error_message[70];
@@ -1449,6 +1452,29 @@ static void s_reset_state(struct aws_event_stream_streaming_decoder *decoder) {
     decoder->state = s_start_state;
 }
 
+void aws_event_stream_streaming_decoder_init_from_options(
+    struct aws_event_stream_streaming_decoder *decoder,
+    struct aws_allocator *allocator,
+    const struct aws_event_stream_streaming_decoder_options *options) {
+    AWS_ASSERT(decoder);
+    AWS_ASSERT(allocator);
+    AWS_ASSERT(options);
+    AWS_ASSERT(options->on_error);
+    AWS_ASSERT(options->on_header);
+    AWS_ASSERT(options->on_payload_segment);
+    AWS_ASSERT(options->on_prelude);
+    AWS_ASSERT(options->on_prelude);
+
+    s_reset_state(decoder);
+    decoder->alloc = allocator;
+    decoder->on_error = options->on_error;
+    decoder->on_header = options->on_header;
+    decoder->on_payload = options->on_payload_segment;
+    decoder->on_prelude = options->on_prelude;
+    decoder->on_complete = options->on_complete;
+    decoder->user_context = options->user_data;
+}
+
 void aws_event_stream_streaming_decoder_init(
     struct aws_event_stream_streaming_decoder *decoder,
     struct aws_allocator *alloc,
@@ -1458,13 +1484,12 @@ void aws_event_stream_streaming_decoder_init(
     aws_event_stream_on_error_fn *on_error,
     void *user_data) {
 
-    s_reset_state(decoder);
-    decoder->alloc = alloc;
-    decoder->on_error = on_error;
-    decoder->on_header = on_header;
-    decoder->on_payload = on_payload_segment;
-    decoder->on_prelude = on_prelude;
-    decoder->user_context = user_data;
+    struct aws_event_stream_streaming_decoder_options decoder_options = {.on_payload_segment = on_payload_segment,
+                                                                         .on_prelude = on_prelude,
+                                                                         .on_header = on_header,
+                                                                         .on_error = on_error,
+                                                                         .user_data = user_data};
+    aws_event_stream_streaming_decoder_init_from_options(decoder, alloc, &decoder_options);
 }
 
 void aws_event_stream_streaming_decoder_clean_up(struct aws_event_stream_streaming_decoder *decoder) {
@@ -1474,6 +1499,7 @@ void aws_event_stream_streaming_decoder_clean_up(struct aws_event_stream_streami
     decoder->on_payload = 0;
     decoder->on_prelude = 0;
     decoder->user_context = 0;
+    decoder->on_complete = 0;
 }
 
 /* Simply sends the data to the state machine until all has been processed or an error is returned. */
