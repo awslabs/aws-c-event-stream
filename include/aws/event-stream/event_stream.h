@@ -198,7 +198,7 @@ struct aws_event_stream_streaming_decoder_options {
     /**
      * (Required)
      * Invoked when an error is encountered. The decoder is not in a good state for usage after this callback.
-     * See `aws_event_stream_header_received_fn`.
+     * See `aws_event_stream_on_error_fn`.
      */
     aws_event_stream_on_error_fn *on_error;
     /**
