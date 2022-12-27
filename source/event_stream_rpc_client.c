@@ -985,7 +985,8 @@ int aws_event_stream_rpc_client_continuation_activate(
     aws_mutex_lock(&continuation->connection->stream_lock);
 
     if (continuation->stream_id) {
-        AWS_LOGF_ERROR(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: stream has already been activated", (void *)continuation);
+        AWS_LOGF_ERROR(AWS_LS_EVENT_STREAM_RPC_CLIENT,
+            "id=%p: stream has already been activated", (void *)continuation);
         aws_raise_error(AWS_ERROR_INVALID_STATE);
         goto clean_up;
     }
