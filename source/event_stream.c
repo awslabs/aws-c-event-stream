@@ -762,7 +762,7 @@ int aws_event_stream_add_bool_header_by_cursor(
         name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
+        .header_name_len = (uint8_t)name.len,
         .header_value_len = 0,
         .value_owned = 0,
         .header_value_type = value ? AWS_EVENT_STREAM_HEADER_BOOL_TRUE : AWS_EVENT_STREAM_HEADER_BOOL_FALSE,
@@ -785,7 +785,7 @@ int aws_event_stream_add_byte_header_by_cursor(
         name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
+        .header_name_len = (uint8_t)name.len,
         .header_value_len = 1,
         .value_owned = 0,
         .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE,
@@ -809,7 +809,7 @@ int aws_event_stream_add_int16_header_by_cursor(
         name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
+        .header_name_len = (uint8_t)name.len,
         .header_value_len = sizeof(value),
         .value_owned = 0,
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT16,
@@ -833,7 +833,7 @@ int aws_event_stream_add_int32_header_by_cursor(
         name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
+        .header_name_len = (uint8_t)name.len,
         .header_value_len = sizeof(value),
         .value_owned = 0,
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT32,
@@ -858,7 +858,7 @@ int aws_event_stream_add_int64_header_by_cursor(
         name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
+        .header_name_len = (uint8_t)name.len,
         .header_value_len = sizeof(value),
         .value_owned = 0,
         .header_value_type = AWS_EVENT_STREAM_HEADER_INT64,
@@ -884,8 +884,8 @@ int aws_event_stream_add_string_header_by_cursor(
     AWS_RETURN_ERROR_IF(value.len <= INT16_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
-        .header_value_len = value.len,
+        .header_name_len = (uint8_t)name.len,
+        .header_value_len = (uint16_t)value.len,
         .value_owned = 1,
         .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
     };
@@ -906,8 +906,8 @@ int aws_event_stream_add_byte_buf_header_by_cursor(
     AWS_RETURN_ERROR_IF(value.len <= INT16_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
-        .header_value_len = value.len,
+        .header_name_len = (uint8_t)name.len,
+        .header_value_len = (uint16_t)value.len,
         .value_owned = 1,
         .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF,
     };
@@ -927,8 +927,8 @@ int aws_event_stream_add_timestamp_header_by_cursor(
         name.len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
-        .header_value_len = sizeof(uint64_t),
+        .header_name_len = (uint8_t)name.len,
+        .header_value_len = sizeof(value),
         .value_owned = 0,
         .header_value_type = AWS_EVENT_STREAM_HEADER_TIMESTAMP,
     };
@@ -953,7 +953,7 @@ int aws_event_stream_add_uuid_header_by_cursor(
     AWS_RETURN_ERROR_IF(value.len == UUID_LEN, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
-        .header_name_len = name.len,
+        .header_name_len = (uint8_t)name.len,
         .header_value_len = UUID_LEN,
         .value_owned = 0,
         .header_value_type = AWS_EVENT_STREAM_HEADER_UUID,
