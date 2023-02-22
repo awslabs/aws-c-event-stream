@@ -890,7 +890,8 @@ int aws_event_stream_add_string_header_by_cursor(
         .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
     };
 
-    return s_add_variable_len_header(headers, &header, (const char *)name.ptr, name.len, value.ptr, value.len, 1);
+    return s_add_variable_len_header(
+        headers, &header, (const char *)name.ptr, (uint8_t)name.len, value.ptr, (uint16_t)value.len, 1);
 }
 
 int aws_event_stream_add_byte_buf_header_by_cursor(
@@ -912,7 +913,8 @@ int aws_event_stream_add_byte_buf_header_by_cursor(
         .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF,
     };
 
-    return s_add_variable_len_header(headers, &header, (const char *)name.ptr, name.len, value.ptr, value.len, 1);
+    return s_add_variable_len_header(
+        headers, &header, (const char *)name.ptr, (uint8_t)name.len, value.ptr, (uint16_t)value.len, 1);
 }
 
 int aws_event_stream_add_timestamp_header_by_cursor(
