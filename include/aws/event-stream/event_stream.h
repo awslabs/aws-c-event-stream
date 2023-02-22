@@ -471,6 +471,125 @@ AWS_EVENT_STREAM_API int aws_event_stream_add_header(
     struct aws_array_list *headers,
     const struct aws_event_stream_header_value_pair *header);
 
+/* Cursor-based header APIs */
+
+/**
+ * Adds a boolean-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_bool_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    bool value);
+
+/**
+ * Adds a byte-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_byte_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    int8_t value);
+
+/**
+ * Adds a int16-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_int16_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    int16_t value);
+
+/**
+ * Adds a int32-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_int32_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    int32_t value);
+
+/**
+ * Adds a int64-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_int64_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    int64_t value);
+
+/**
+ * Adds a string-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_string_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    struct aws_byte_cursor value);
+
+/**
+ * Adds a byte_buf-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_byte_buf_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    struct aws_byte_cursor value);
+
+/**
+ * Adds a timestamp-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_timestamp_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    int64_t value);
+
+/**
+ * Adds a uuid-valued header to a header list
+ *
+ * @param headers header list to add to
+ * @param name name of the header to add
+ * @param value value of the header to add
+ * @return AWS_OP_SUCCESS on success, AWS_OP_ERR on failure
+ */
+AWS_EVENT_STREAM_API int aws_event_stream_add_uuid_header_by_cursor(
+    struct aws_array_list *headers,
+    struct aws_byte_cursor name,
+    struct aws_byte_cursor value);
+
 /**
  * Returns the header name. Note: this value is not null terminated
  */
