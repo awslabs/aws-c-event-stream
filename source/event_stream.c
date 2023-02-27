@@ -708,7 +708,8 @@ int aws_event_stream_add_string_header(
         .header_name_len = name_len,
         .header_value_len = value_len,
         .value_owned = copy,
-        .header_value_type = AWS_EVENT_STREAM_HEADER_STRING};
+        .header_value_type = AWS_EVENT_STREAM_HEADER_STRING,
+    };
 
     return s_add_variable_len_header(headers, &header, name, name_len, (uint8_t *)value, value_len, copy);
 }
@@ -750,6 +751,12 @@ struct aws_event_stream_header_value_pair aws_event_stream_create_int32_header(
     return header;
 }
 
+int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+
+    return aws_event_stream_add_bool_header_by_cursor(headers, name_cursor, value != 0);
+}
+
 int aws_event_stream_add_bool_header_by_cursor(
     struct aws_array_list *headers,
     struct aws_byte_cursor name,
@@ -771,6 +778,12 @@ int aws_event_stream_add_bool_header_by_cursor(
     memcpy((void *)header.header_name, (void *)name.ptr, (size_t)name.len);
 
     return aws_array_list_push_back(headers, (void *)&header);
+}
+
+int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+
+    return aws_event_stream_add_byte_header_by_cursor(headers, name_cursor, value);
 }
 
 int aws_event_stream_add_byte_header_by_cursor(
@@ -795,6 +808,17 @@ int aws_event_stream_add_byte_header_by_cursor(
     memcpy((void *)header.header_name, (void *)name.ptr, (size_t)name.len);
 
     return aws_array_list_push_back(headers, (void *)&header);
+}
+
+int aws_event_stream_add_int16_header(
+    struct aws_array_list *headers,
+    const char *name,
+    uint8_t name_len,
+    int16_t value) {
+
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+
+    return aws_event_stream_add_int16_header_by_cursor(headers, name_cursor, value);
 }
 
 int aws_event_stream_add_int16_header_by_cursor(
@@ -822,6 +846,17 @@ int aws_event_stream_add_int16_header_by_cursor(
     return aws_array_list_push_back(headers, (void *)&header);
 }
 
+int aws_event_stream_add_int32_header(
+    struct aws_array_list *headers,
+    const char *name,
+    uint8_t name_len,
+    int32_t value) {
+
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+
+    return aws_event_stream_add_int32_header_by_cursor(headers, name_cursor, value);
+}
+
 int aws_event_stream_add_int32_header_by_cursor(
     struct aws_array_list *headers,
     struct aws_byte_cursor name,
@@ -844,6 +879,17 @@ int aws_event_stream_add_int32_header_by_cursor(
     memcpy((void *)header.header_name, (void *)name.ptr, (size_t)name.len);
 
     return aws_array_list_push_back(headers, (void *)&header);
+}
+
+int aws_event_stream_add_int64_header(
+    struct aws_array_list *headers,
+    const char *name,
+    uint8_t name_len,
+    int64_t value) {
+
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+
+    return aws_event_stream_add_int64_header_by_cursor(headers, name_cursor, value);
 }
 
 int aws_event_stream_add_int64_header_by_cursor(
@@ -917,6 +963,17 @@ int aws_event_stream_add_byte_buf_header_by_cursor(
         headers, &header, (const char *)name.ptr, (uint8_t)name.len, value.ptr, (uint16_t)value.len, 1);
 }
 
+int aws_event_stream_add_timestamp_header(
+    struct aws_array_list *headers,
+    const char *name,
+    uint8_t name_len,
+    int64_t value) {
+
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+
+    return aws_event_stream_add_timestamp_header_by_cursor(headers, name_cursor, value);
+}
+
 int aws_event_stream_add_timestamp_header_by_cursor(
     struct aws_array_list *headers,
     struct aws_byte_cursor name,
@@ -940,6 +997,18 @@ int aws_event_stream_add_timestamp_header_by_cursor(
     memcpy((void *)header.header_name, (void *)name.ptr, (size_t)name.len);
 
     return aws_array_list_push_back(headers, (void *)&header);
+}
+
+int aws_event_stream_add_uuid_header(
+    struct aws_array_list *headers,
+    const char *name,
+    uint8_t name_len,
+    const uint8_t *value) {
+
+    struct aws_byte_cursor name_cursor = aws_byte_cursor_from_array(name, (size_t)name_len);
+    struct aws_byte_cursor value_cursor = aws_byte_cursor_from_array(value, (size_t)UUID_LEN);
+
+    return aws_event_stream_add_uuid_header_by_cursor(headers, name_cursor, value_cursor);
 }
 
 int aws_event_stream_add_uuid_header_by_cursor(
@@ -967,66 +1036,6 @@ int aws_event_stream_add_uuid_header_by_cursor(
     return aws_array_list_push_back(headers, (void *)&header);
 }
 
-int aws_event_stream_add_byte_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    return aws_event_stream_add_byte_header_by_cursor(headers, name_cursor, value);
-}
-
-int aws_event_stream_add_bool_header(struct aws_array_list *headers, const char *name, uint8_t name_len, int8_t value) {
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    return aws_event_stream_add_bool_header_by_cursor(headers, name_cursor, value != 0);
-}
-
-int aws_event_stream_add_int16_header(
-    struct aws_array_list *headers,
-    const char *name,
-    uint8_t name_len,
-    int16_t value) {
-
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    return aws_event_stream_add_int16_header_by_cursor(headers, name_cursor, value);
-}
-
-int aws_event_stream_add_int32_header(
-    struct aws_array_list *headers,
-    const char *name,
-    uint8_t name_len,
-    int32_t value) {
-
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    return aws_event_stream_add_int32_header_by_cursor(headers, name_cursor, value);
-}
-
-int aws_event_stream_add_int64_header(
-    struct aws_array_list *headers,
-    const char *name,
-    uint8_t name_len,
-    int64_t value) {
-
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    return aws_event_stream_add_int64_header_by_cursor(headers, name_cursor, value);
-}
-
 int aws_event_stream_add_bytebuf_header(
     struct aws_array_list *headers,
     const char *name,
@@ -1047,39 +1056,6 @@ int aws_event_stream_add_bytebuf_header(
         .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF};
 
     return s_add_variable_len_header(headers, &header, name, name_len, value, value_len, copy);
-}
-
-int aws_event_stream_add_timestamp_header(
-    struct aws_array_list *headers,
-    const char *name,
-    uint8_t name_len,
-    int64_t value) {
-
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    return aws_event_stream_add_timestamp_header_by_cursor(headers, name_cursor, value);
-}
-
-int aws_event_stream_add_uuid_header(
-    struct aws_array_list *headers,
-    const char *name,
-    uint8_t name_len,
-    const uint8_t *value) {
-
-    struct aws_byte_cursor name_cursor = {
-        .ptr = (uint8_t *)name,
-        .len = (size_t)name_len,
-    };
-
-    struct aws_byte_cursor value_cursor = {
-        .ptr = (uint8_t *)value,
-        .len = UUID_LEN,
-    };
-
-    return aws_event_stream_add_uuid_header_by_cursor(headers, name_cursor, value_cursor);
 }
 
 int aws_event_stream_add_header(
