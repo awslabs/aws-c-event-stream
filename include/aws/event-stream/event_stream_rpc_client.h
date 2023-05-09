@@ -7,6 +7,8 @@
 
 #include <aws/event-stream/event_stream_rpc.h>
 
+AWS_PUSH_SANE_WARNING_LEVEL
+
 struct aws_channel;
 struct aws_event_stream_rpc_client_connection;
 struct aws_event_stream_rpc_client_continuation_token;
@@ -194,5 +196,6 @@ AWS_EVENT_STREAM_API int aws_event_stream_rpc_client_continuation_send_message(
     void *user_data);
 
 AWS_EXTERN_C_END
+AWS_POP_SANE_WARNING_LEVEL
 
 #endif /* AWS_EVENT_STREAM_RPC_CLIENT_H */

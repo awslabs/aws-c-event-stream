@@ -13,6 +13,8 @@
 
 #include <stdio.h>
 
+AWS_PUSH_SANE_WARNING_LEVEL
+
 #define AWS_C_EVENT_STREAM_PACKAGE_ID 4
 /* max message size is 16MB */
 #define AWS_EVENT_STREAM_MAX_MESSAGE_SIZE (16 * 1024 * 1024)
@@ -672,5 +674,6 @@ AWS_EVENT_STREAM_API void aws_event_stream_library_init(struct aws_allocator *al
 AWS_EVENT_STREAM_API void aws_event_stream_library_clean_up(void);
 
 AWS_EXTERN_C_END
+AWS_POP_SANE_WARNING_LEVEL
 
 #endif /* AWS_EVENT_STREAM_H_ */
