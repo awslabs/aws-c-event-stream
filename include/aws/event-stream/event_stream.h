@@ -28,6 +28,8 @@ AWS_PUSH_SANE_WARNING_LEVEL
 /* Max header static value length is 16 bytes */
 #define AWS_EVENT_STREAM_HEADER_STATIC_VALUE_LEN_MAX (16)
 
+#define UUID_LEN 16
+
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_EVENT_STREAM_PACKAGE_ID),
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
@@ -83,7 +85,6 @@ enum aws_event_stream_header_value_type {
     AWS_EVENT_STREAM_HEADER_UUID
 };
 
-static const uint16_t UUID_LEN = 16U;
 struct aws_event_stream_header_value_pair {
     uint8_t header_name_len;
     char header_name[INT8_MAX];
