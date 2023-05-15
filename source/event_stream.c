@@ -94,6 +94,8 @@ static struct aws_log_subject_info_list s_event_stream_log_subject_list = {
     .count = AWS_ARRAY_SIZE(s_event_stream_log_subject_infos),
 };
 
+static const uint16_t UUID_LEN = 16U;
+
 void aws_event_stream_library_init(struct aws_allocator *allocator) {
     if (!s_event_stream_library_initialized) {
         s_event_stream_library_initialized = true;
