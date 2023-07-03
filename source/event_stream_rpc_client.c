@@ -429,13 +429,16 @@ static void s_on_protocol_message_written_fn(
         AWS_FATAL_ASSERT(message_args->continuation && "end stream flag was set but it wasn't on a continuation");
         aws_atomic_store_int(&message_args->continuation->is_closed, 1U);
 
+        int was_present = 0;
         aws_mutex_lock(&message_args->connection->stream_lock);
         aws_hash_table_remove(
-            &message_args->connection->continuation_table, &message_args->continuation->stream_id, NULL, NULL);
+            &message_args->connection->continuation_table, &message_args->continuation->stream_id, NULL, &was_present);
         aws_mutex_unlock(&message_args->connection->stream_lock);
 
         /* Lock must NOT be held while invoking callback */
-        s_complete_continuation(message_args->continuation);
+        if (was_present) {
+            s_complete_continuation(message_args->continuation);
+        }
     }
 
     message_args->flush_fn(error_code, message_args->user_data);
@@ -785,12 +788,15 @@ static void s_route_message_by_type(
                 (void *)connection,
                 (void *)continuation);
             aws_atomic_store_int(&continuation->is_closed, 1U);
+            int was_present = 0;
             aws_mutex_lock(&connection->stream_lock);
-            aws_hash_table_remove(&connection->continuation_table, &stream_id, NULL, NULL);
+            aws_hash_table_remove(&connection->continuation_table, &stream_id, NULL, &was_present);
             aws_mutex_unlock(&connection->stream_lock);
 
             /* Note that we do not invoke callback while holding lock */
-            s_complete_continuation(continuation);
+            if (was_present) {
+                s_complete_continuation(continuation);
+            }
         }
     } else {
         if (message_type <= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR ||
