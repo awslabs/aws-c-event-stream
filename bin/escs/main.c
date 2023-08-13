@@ -44,11 +44,16 @@ struct app_ctx {
     struct aws_event_stream_rpc_server_connection *server_connection;
     struct aws_event_stream_rpc_client_connection *client_connection;
 
+    struct aws_event_stream_rpc_client_continuation_token *client_continuation;
+    struct aws_event_stream_rpc_server_continuation_token *server_continuation;
+
     bool client_connection_setup_completed;
     bool server_connection_setup_completed;
 
     bool server_received_connect;
     bool client_received_connack;
+
+    bool client_continuation_message_received;
 
     bool client_connection_shutdown_completed;
     bool server_connection_shutdown_completed;
@@ -82,15 +87,17 @@ static void s_fixture_on_server_protocol_message(
     aws_condition_variable_notify_one(&context->signal);
 }
 
+static void s_aws_event_stream_rpc_server_message_flush_fn(int error_code, void *user_data) {
+    (void)error_code;
+    (void)user_data;
+}
+
 static void s_on_stream_server_continuation_shim(
     struct aws_event_stream_rpc_server_continuation_token *token,
     const struct aws_event_stream_rpc_message_args *message_args,
     void *user_data) {
-    (void)token;
-    (void)message_args;
-    (void)user_data;
 
-    // TODO
+    aws_event_stream_rpc_server_continuation_send_message(token, message_args, s_aws_event_stream_rpc_server_message_flush_fn, user_data);
 }
 
 static void s_stream_server_continuation_closed_shim(
@@ -118,7 +125,7 @@ static int s_on_server_incoming_stream_shim(
     continuation_options->on_continuation_closed = s_stream_server_continuation_closed_shim;
     continuation_options->user_data = context;
 
-    // TODO
+    context->server_continuation = token;
 
     return AWS_OP_SUCCESS;
 }
@@ -326,17 +333,7 @@ static bool s_client_received_connack_predicate(void *arg) {
     return context->client_received_connack;
 }
 
-int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-
-    struct aws_allocator *allocator = aws_default_allocator();
-
-    aws_event_stream_library_init(allocator);
-
-    struct app_ctx context;
-    s_init_app_ctx(&context, allocator);
-
+static void s_connect_handshake(struct app_ctx *context) {
     struct aws_byte_buf connect_payload = aws_byte_buf_from_c_str("{ \"message\": \" connect message \" }");
     struct aws_event_stream_rpc_message_args connect_args = {
         .headers_count = 0,
@@ -346,15 +343,15 @@ int main(int argc, char **argv) {
     };
 
     aws_event_stream_rpc_client_connection_send_protocol_message(
-        context.client_connection, &connect_args, s_rpc_client_message_flush, &context);
+        context->client_connection, &connect_args, s_rpc_client_message_flush, context);
 
-    aws_mutex_lock(&context.lock);
+    aws_mutex_lock(&context->lock);
     aws_condition_variable_wait_pred(
-        &context.signal,
-        &context.lock,
+        &context->signal,
+        &context->lock,
         s_server_received_connect_predicate,
-        &context);
-    aws_mutex_unlock(&context.lock);
+        context);
+    aws_mutex_unlock(&context->lock);
 
     struct aws_byte_buf connack_payload = aws_byte_buf_from_c_str("{ \"message\": \" connack message \" }");
     struct aws_event_stream_rpc_message_args connack_args = {
@@ -366,15 +363,95 @@ int main(int argc, char **argv) {
     };
 
     aws_event_stream_rpc_server_connection_send_protocol_message(
-        context.server_connection, &connack_args, s_rpc_server_message_flush, &context);
+        context->server_connection, &connack_args, s_rpc_server_message_flush, context);
 
-    aws_mutex_lock(&context.lock);
+    aws_mutex_lock(&context->lock);
     aws_condition_variable_wait_pred(
-        &context.signal,
-        &context.lock,
+        &context->signal,
+        &context->lock,
         s_client_received_connack_predicate,
-        &context);
-    aws_mutex_unlock(&context.lock);
+        context);
+    aws_mutex_unlock(&context->lock);
+}
+
+static void s_rpc_client_stream_continuation(
+    struct aws_event_stream_rpc_client_continuation_token *token,
+    const struct aws_event_stream_rpc_message_args *message_args,
+    void *user_data) {
+    (void)token;
+
+    struct app_ctx *context = user_data;
+
+    aws_mutex_lock(&context->lock);
+
+    if (message_args->message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_MESSAGE) {
+        context->client_continuation_message_received = true;
+    }
+
+    aws_mutex_unlock(&context->lock);
+    aws_condition_variable_notify_one(&context->signal);
+}
+
+static void s_rpc_client_stream_continuation_closed(
+    struct aws_event_stream_rpc_client_continuation_token *token,
+    void *user_data) {
+
+    (void)token;
+    (void)user_data;
+}
+
+static bool s_client_continuation_message_recceived_predicate(void *arg) {
+    struct app_ctx *context = arg;
+    return context->client_continuation_message_received;
+}
+
+static void s_operation(struct app_ctx *context) {
+    struct aws_event_stream_rpc_client_stream_continuation_options continuation_options = {
+        .user_data = context,
+        .on_continuation = s_rpc_client_stream_continuation,
+        .on_continuation_closed = s_rpc_client_stream_continuation_closed,
+    };
+
+    context->client_continuation =
+        aws_event_stream_rpc_client_connection_new_stream(context->client_connection, &continuation_options);
+
+    struct aws_byte_cursor operation_name = aws_byte_cursor_from_c_str("test_operation");
+    struct aws_byte_buf operation_payload = aws_byte_buf_from_c_str("{ \"message\": \" operation payload \" }");
+    struct aws_event_stream_rpc_message_args operation_args = {
+        .headers_count = 0,
+        .headers = NULL,
+        .message_type = AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_MESSAGE,
+        .payload = &operation_payload,
+    };
+
+    aws_event_stream_rpc_client_continuation_activate(
+        context->client_continuation, operation_name, &operation_args, s_rpc_client_message_flush, context);
+
+    aws_mutex_lock(&context->lock);
+    aws_condition_variable_wait_pred(
+        &context->signal,
+        &context->lock,
+        s_client_continuation_message_recceived_predicate,
+        context);
+    aws_mutex_unlock(&context->lock);
+
+    aws_event_stream_rpc_client_continuation_release(context->client_continuation);
+}
+
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
+    struct aws_allocator *allocator = aws_default_allocator();
+
+    aws_event_stream_library_init(allocator);
+
+    struct app_ctx context;
+    s_init_app_ctx(&context, allocator);
+
+    s_connect_handshake(&context);
+
+    s_operation(&context);
 
     s_clean_up_app_ctx(&context);
 
