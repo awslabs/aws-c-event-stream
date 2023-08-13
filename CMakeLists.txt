@@ -109,9 +109,5 @@ enable_testing()
 if (BUILD_TESTING)
     add_subdirectory(tests)
 
-    if(NOT MSVC)
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-    endif()
-
-    add_subdirectory(bin)
+    add_subdirectory(bin/escs)
 endif()
