@@ -427,6 +427,21 @@ static int s_test_streaming_decoder_incoming_application_variable_headers_with_e
     ASSERT_INT_EQUALS(0, latest_header_value.len);
     ASSERT_NULL(latest_header_value.buffer);
 
+    const char *expected_string_header_name = "string";
+    aws_array_list_get_at(&decoder_data.headers_list, &latest_header, 1);
+
+    ASSERT_BIN_ARRAYS_EQUALS(
+        expected_string_header_name,
+        strlen(expected_string_header_name),
+        latest_header.header_name,
+        latest_header.header_name_len,
+        "header name should have been %s",
+        expected_header_name);
+
+    latest_header_value = aws_event_stream_header_value_as_bytebuf(&latest_header);
+    ASSERT_INT_EQUALS(0, latest_header_value.len);
+    ASSERT_NULL(latest_header_value.buffer);
+
     aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
     return 0;
 }
