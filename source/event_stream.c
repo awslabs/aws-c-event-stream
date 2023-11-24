@@ -676,7 +676,7 @@ static int s_add_variable_len_header(
 
     memcpy((void *)header->header_name, (void *)name, (size_t)name_len);
 
-    if (copy && value_len != 0) {
+    if (copy) {
         header->header_value.variable_len_val = aws_mem_acquire(headers->alloc, value_len);
         header->value_owned = 1;
         memcpy((void *)header->header_value.variable_len_val, (void *)value, value_len);
@@ -1030,10 +1030,11 @@ int aws_event_stream_add_bytebuf_header(
         name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
     AWS_RETURN_ERROR_IF(value_len <= INT16_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
-    struct aws_event_stream_header_value_pair header = {.header_name_len = name_len,
-                                                        .header_value_len = value_len,
-                                                        .value_owned = copy,
-                                                        .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF};
+    struct aws_event_stream_header_value_pair header = {
+        .header_name_len = name_len,
+        .header_value_len = value_len,
+        .value_owned = copy,
+        .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF};
 
     return s_add_variable_len_header(headers, &header, name, name_len, value, value_len, copy);
 }
@@ -1601,11 +1602,12 @@ void aws_event_stream_streaming_decoder_init(
     aws_event_stream_on_error_fn *on_error,
     void *user_data) {
 
-    struct aws_event_stream_streaming_decoder_options decoder_options = {.on_payload_segment = on_payload_segment,
-                                                                         .on_prelude = on_prelude,
-                                                                         .on_header = on_header,
-                                                                         .on_error = on_error,
-                                                                         .user_data = user_data};
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = on_payload_segment,
+        .on_prelude = on_prelude,
+        .on_header = on_header,
+        .on_error = on_error,
+        .user_data = user_data};
     aws_event_stream_streaming_decoder_init_from_options(decoder, alloc, &decoder_options);
 }
 

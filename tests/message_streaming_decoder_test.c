@@ -441,8 +441,8 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
     (void)ctx;
     /* clang-format off */
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x18,         /* total length */
-        0x00, 0x00, 0x00, 0x08,         /* headers length */
+        0x00, 0x00, 0x00, 0x17,         /* total length */
+        0x00, 0x00, 0x00, 0x07,         /* headers length */
         0x29, 0x86, 0x01, 0x58,         /* prelude crc */
         0x05,                           /* header name length */
         'e',  'v',  'e',  'n',  't',    /* header name */
