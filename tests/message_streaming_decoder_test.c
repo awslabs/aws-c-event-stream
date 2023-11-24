@@ -377,7 +377,7 @@ static int s_test_streaming_decoder_incoming_application_variable_headers_with_e
         0x06,                           /* header value type (BYTE ARRAY)*/
         0x00, 0x00,                     /* header value length */
         0x06,                           /* header name length */
-        's',  't',  'r',  'i','n','g',          /* header name */
+        's',  't',  'r',  'i','n','g',  /* header name */
         0x07,                           /* header value type (String)*/
         0x00, 0x00,                     /* header value length */
         0xC8, 0x4C, 0xF8, 0x53          /* message crc */
