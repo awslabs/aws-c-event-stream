@@ -363,14 +363,86 @@ AWS_TEST_CASE(
     test_streaming_decoder_incoming_application_one_int32_header_pair_valid,
     s_test_streaming_decoder_incoming_application_one_int32_header_pair_valid_fn)
 
+static int s_test_streaming_decoder_incoming_application_variable_headers_with_empty_length_pair_valid_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    /* clang-format off */
+    uint8_t test_data[] = {
+        0x00, 0x00, 0x00, 0x22,         /* total length */
+        0x00, 0x00, 0x00, 0x12,         /* headers length */
+        0x2D, 0x9A, 0xD2, 0x45,         /* prelude crc */
+        0x04,                           /* header name length */
+        'b',  'u',  'f',  'f',          /* header name */
+        0x06,                           /* header value type (BYTE ARRAY)*/
+        0x00, 0x00,                     /* header value length */
+        0x06,                           /* header name length */
+        's',  't',  'r',  'i','n','g',          /* header name */
+        0x07,                           /* header value type (String)*/
+        0x00, 0x00,                     /* header value length */
+        0xC8, 0x4C, 0xF8, 0x53          /* message crc */
+    };
+    /* clang-format on */
+    struct test_decoder_data decoder_data = {
+        .latest_payload = 0,
+        .written = 0,
+        .alloc = allocator,
+        .latest_error = 0,
+    };
+    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
+
+    struct aws_event_stream_streaming_decoder decoder;
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
+
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+    ASSERT_SUCCESS(
+        aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
+    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+
+    ASSERT_INT_EQUALS(0x00000022, decoder_data.latest_prelude.total_len);
+    ASSERT_INT_EQUALS(0x00000012, decoder_data.latest_prelude.headers_len);
+    ASSERT_INT_EQUALS(0x2D9AD245, decoder_data.latest_prelude.prelude_crc);
+    ASSERT_UINT_EQUALS(0xC84CF853, decoder_data.message_crc);
+
+    const char *expected_header_name = "buff";
+    struct aws_event_stream_header_value_pair latest_header;
+    aws_array_list_get_at(&decoder_data.headers_list, &latest_header, 0);
+
+    ASSERT_BIN_ARRAYS_EQUALS(
+        expected_header_name,
+        strlen(expected_header_name),
+        latest_header.header_name,
+        latest_header.header_name_len,
+        "header name should have been %s",
+        expected_header_name);
+
+    struct aws_byte_buf latest_header_value = aws_event_stream_header_value_as_bytebuf(&latest_header);
+    ASSERT_INT_EQUALS(0, latest_header_value.len);
+    ASSERT_NULL(latest_header_value.buffer);
+
+    aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
+    return 0;
+}
+
+AWS_TEST_CASE(
+    test_streaming_decoder_incoming_application_variable_headers_with_empty_length_pair_valid,
+    s_test_streaming_decoder_incoming_application_variable_headers_with_empty_length_pair_valid_fn)
+
 static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_valid_fn(
     struct aws_allocator *allocator,
     void *ctx) {
     (void)ctx;
     /* clang-format off */
     uint8_t test_data[] = {
-        0x00, 0x00, 0x00, 0x17,         /* total length */
-        0x00, 0x00, 0x00, 0x07,         /* headers length */
+        0x00, 0x00, 0x00, 0x18,         /* total length */
+        0x00, 0x00, 0x00, 0x08,         /* headers length */
         0x29, 0x86, 0x01, 0x58,         /* prelude crc */
         0x05,                           /* header name length */
         'e',  'v',  'e',  'n',  't',    /* header name */
