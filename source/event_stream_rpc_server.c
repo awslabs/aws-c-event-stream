@@ -436,7 +436,7 @@ error:
     return NULL;
 }
 
-uint16_t aws_event_stream_rpc_server_listener_get_bound_port(
+uint32_t aws_event_stream_rpc_server_listener_get_bound_port(
     const struct aws_event_stream_rpc_server_listener *server) {
 
     struct aws_socket_endpoint address;
