@@ -1034,7 +1034,8 @@ int aws_event_stream_add_bytebuf_header(
         .header_name_len = name_len,
         .header_value_len = value_len,
         .value_owned = copy,
-        .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF};
+        .header_value_type = AWS_EVENT_STREAM_HEADER_BYTE_BUF,
+    };
 
     return s_add_variable_len_header(headers, &header, name, name_len, value, value_len, copy);
 }
@@ -1607,7 +1608,8 @@ void aws_event_stream_streaming_decoder_init(
         .on_prelude = on_prelude,
         .on_header = on_header,
         .on_error = on_error,
-        .user_data = user_data};
+        .user_data = user_data,
+    };
     aws_event_stream_streaming_decoder_init_from_options(decoder, alloc, &decoder_options);
 }
 
