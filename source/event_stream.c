@@ -676,7 +676,7 @@ static int s_add_variable_len_header(
 
     memcpy((void *)header->header_name, (void *)name, (size_t)name_len);
 
-    if (copy) {
+    if (value_len != 0 && copy) {
         header->header_value.variable_len_val = aws_mem_acquire(headers->alloc, value_len);
         header->value_owned = 1;
         memcpy((void *)header->header_value.variable_len_val, (void *)value, value_len);
