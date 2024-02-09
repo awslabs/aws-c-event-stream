@@ -500,7 +500,7 @@ static int s_send_protocol_message(
     struct event_stream_connection_send_message_args *args =
         aws_mem_calloc(connection->allocator, 1, sizeof(struct event_stream_connection_send_message_args));
 
-    if (!message_args) {
+    if (!args) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: failed to allocate callback arguments %s.",
