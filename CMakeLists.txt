@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0.
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required (VERSION 3.13)
 project (aws-c-event-stream C)
 
 if (DEFINED CMAKE_PREFIX_PATH)
@@ -58,7 +58,6 @@ file(GLOB EVENT_STREAM_SRC
     ${AWS_EVENT_STREAM_SRC}
 )
 
-aws_set_common_policies()
 add_library(${PROJECT_NAME} ${EVENT_STREAM_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_add_sanitizers(${PROJECT_NAME})
