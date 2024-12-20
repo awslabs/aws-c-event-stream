@@ -15,11 +15,6 @@ include(CheckCCompilerFlag)
 include(AwsFindPackage)
 include(AwsCheckHeaders)
 
-if(NOT MSVC)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-endif()
-
 file(GLOB AWS_EVENT_STREAM_HEADERS
      "include/aws/event-stream/*.h"
 )
@@ -66,7 +61,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 aws_prepare_shared_lib_exports(${PROJECT_NAME})
 
 install(FILES ${AWS_EVENT_STREAM_HEADERS}
-    DESTINATION "include/aws/event-stream"
+    DESTINATION "${INCLUDE_DIRECTORY}/aws/event-stream"
     COMPONENT Development)
 
 if (BUILD_SHARED_LIBS)
@@ -93,10 +88,5 @@ include(CTest)
 enable_testing()
 if (BUILD_TESTING)
     add_subdirectory(tests)
-
-    if(NOT MSVC)
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-    endif()
-
     add_subdirectory(bin)
 endif()
