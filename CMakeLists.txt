@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0.
-cmake_minimum_required (VERSION 3.9)
+cmake_minimum_required(VERSION 3.9...3.31)
 project (aws-c-event-stream C)
 
 if (NOT IN_SOURCE_BUILD)
