@@ -16,7 +16,7 @@
 AWS_PUSH_SANE_WARNING_LEVEL
 
 #define AWS_C_EVENT_STREAM_PACKAGE_ID 4
-/* max message size is 16MB */
+/* max message size is 24MB */
 #define AWS_EVENT_STREAM_MAX_MESSAGE_SIZE (24 * 1024 * 1024)
 
 /* max header size is 128kb */
