@@ -396,7 +396,7 @@ static int s_test_channel_handler_msg_too_large_fails(struct aws_allocator *allo
     test_data->user_data = &message_test_data;
 
     /* message is 1 byte too large */
-    uint8_t empty_message[AWS_EVENT_STREAM_MAX_MESSAGE_SIZE + 1] = {0}
+    uint8_t empty_message[AWS_EVENT_STREAM_MAX_MESSAGE_SIZE + 1] = {0};
 
     struct aws_byte_cursor empty_message_cursor = aws_byte_cursor_from_array(empty_message, sizeof(empty_message));
     ASSERT_SUCCESS(testing_channel_push_read_data(&s_test_data.testing_channel, empty_message_cursor));
