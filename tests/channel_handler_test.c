@@ -395,7 +395,7 @@ static int s_test_channel_handler_msg_too_large_fails(struct aws_allocator *allo
     test_data->received_fn = s_test_on_single_message;
     test_data->user_data = &message_test_data;
 
-    /* message is 1 byte too large */
+    /* message is 1 byte too large */ // pointless change
     uint8_t empty_message[] = {
         0x01,
         0x00,
