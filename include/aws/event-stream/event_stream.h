@@ -16,8 +16,9 @@
 AWS_PUSH_SANE_WARNING_LEVEL
 
 #define AWS_C_EVENT_STREAM_PACKAGE_ID 4
-/* max message size is technically unbounded but we don't want to allocate large buffers in case anything goes wrong.
- * 256MB should be reasonably large buffer size. Current service side max is 24MB likely to increase in future. */
+/* max message size is technically unbounded on the client side, and validated on the server side but we don't want to
+ * allocate large buffers in case of bugs. 256 MB is a reasonably large buffer size limit. Current service-
+ * side max is 24 MB, likely to increase in future. */
 #define AWS_EVENT_STREAM_MAX_MESSAGE_SIZE (256 * 1024 * 1024)
 
 /* max header size is 128kb */
