@@ -384,7 +384,7 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_data)
 
 /* send various valid messages in serial to make sure the happy path of message parsing is correct. */
-static int s_test_channel_handler_msg_too_large_fails(struct aws_allocator *allocator, void *ctx) {
+static int s_test_channel_handler_large_msg_success(struct aws_allocator *allocator, void *ctx) {
     (void)allocator;
 
     struct test_data *test_data = ctx;
@@ -395,7 +395,8 @@ static int s_test_channel_handler_msg_too_large_fails(struct aws_allocator *allo
     test_data->received_fn = s_test_on_single_message;
     test_data->user_data = &message_test_data;
 
-    /* message is 1 byte too large */
+    /* message length is 16MB + 1 byte. We used to have our stream message limit set at 16MB. Now this test validates
+     * that we can send messages > 16MB */
     uint8_t empty_message[] = {
         0x01,
         0x00,
@@ -417,15 +418,14 @@ static int s_test_channel_handler_msg_too_large_fails(struct aws_allocator *allo
 
     struct aws_byte_cursor empty_message_cursor = aws_byte_cursor_from_array(empty_message, sizeof(empty_message));
     ASSERT_SUCCESS(testing_channel_push_read_data(&s_test_data.testing_channel, empty_message_cursor));
-    ASSERT_UINT_EQUALS(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED, message_test_data.last_error_code);
-
+    ASSERT_UINT_EQUALS(AWS_OP_SUCCESS, message_test_data.last_error_code);
     return AWS_OP_SUCCESS;
 }
 
 AWS_TEST_CASE_FIXTURE(
-    test_channel_handler_msg_too_large_fails,
+    test_channel_handler_large_msg_success,
     s_fixture_setup,
-    s_test_channel_handler_msg_too_large_fails,
+    s_test_channel_handler_large_msg_success,
     s_fixture_shutdown,
     &s_test_data)
 
