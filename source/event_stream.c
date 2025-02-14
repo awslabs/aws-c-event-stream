@@ -634,6 +634,8 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
 
     aws_base64_encode(&payload_buffer, &encoded_payload_buffer);
     fprintf(fd, "  \"payload\": \"" PRInSTR "\",\n", AWS_BYTE_BUF_PRI(encoded_payload_buffer));
+    aws_byte_buf_clean_up(&encoded_payload_buffer);
+
     fprintf(fd, "  " DEBUG_STR_MESSAGE_CRC "%d\n}\n", aws_event_stream_message_message_crc(message));
 
     return AWS_OP_SUCCESS;
