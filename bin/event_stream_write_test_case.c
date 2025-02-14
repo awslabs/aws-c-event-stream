@@ -45,7 +45,7 @@ static void write_negative_test_case(
 
     FILE *enc = fopen(enc_output_file, "w");
     if (!enc) {
-        fprintf(stderr, "couldn't write to %s", enc_output_file);
+        fprintf(stderr, "couldn't write to %s\n", enc_output_file);
         exit(-1);
     }
 
@@ -56,7 +56,7 @@ static void write_negative_test_case(
 
     FILE *dec = fopen(dec_output_file, "w");
     if (!dec) {
-        fprintf(stderr, "couldn't write to %s", dec_output_file);
+        fprintf(stderr, "couldn't write to %s\n", dec_output_file);
         exit(-1);
     }
 
@@ -87,7 +87,7 @@ static void write_positive_test_case(
 
     FILE *enc = fopen(enc_output_file, "w");
     if (!enc) {
-        fprintf(stderr, "couldn't write to %s", enc_output_file);
+        fprintf(stderr, "couldn't write to %s\n", enc_output_file);
         exit(-1);
     }
 
@@ -99,7 +99,7 @@ static void write_positive_test_case(
 
     FILE *dec = fopen(dec_output_file, "w");
     if (!dec) {
-        fprintf(stderr, "couldn't write to %s", dec_output_file);
+        fprintf(stderr, "couldn't write to %s\n", dec_output_file);
         exit(-1);
     }
 

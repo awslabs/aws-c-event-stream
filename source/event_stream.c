@@ -627,13 +627,13 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
     const uint8_t *payload = aws_event_stream_message_payload(message);
     size_t encoded_len = 0;
     aws_base64_compute_encoded_len(payload_len, &encoded_len);
-    char *encoded_payload = (char *)aws_mem_acquire(message->alloc, encoded_len);
 
     struct aws_byte_cursor payload_buffer = aws_byte_cursor_from_array(payload, payload_len);
-    struct aws_byte_buf encoded_payload_buffer = aws_byte_buf_from_array((uint8_t *)encoded_payload, encoded_len);
+    struct aws_byte_buf encoded_payload_buffer;
+    aws_byte_buf_init(&encoded_payload_buffer, message->alloc, encoded_len);
 
     aws_base64_encode(&payload_buffer, &encoded_payload_buffer);
-    fprintf(fd, "  \"payload\": \"%s\",\n", encoded_payload);
+    fprintf(fd, "  \"payload\": \"" PRInSTR "\",\n", AWS_BYTE_BUF_PRI(encoded_payload_buffer));
     fprintf(fd, "  " DEBUG_STR_MESSAGE_CRC "%d\n}\n", aws_event_stream_message_message_crc(message));
 
     return AWS_OP_SUCCESS;
