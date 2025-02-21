@@ -593,9 +593,9 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
         } else {
             size_t buffer_len = 0;
             aws_base64_compute_encoded_len(header->header_value_len, &buffer_len);
-            char *encoded_buffer = (char *)aws_mem_acquire(message->alloc, buffer_len);
 
-            struct aws_byte_buf encode_output = aws_byte_buf_from_array((uint8_t *)encoded_buffer, buffer_len);
+            struct aws_byte_buf encode_output;
+            aws_byte_buf_init(&encode_output, message->alloc, buffer_len);
 
             if (header->header_value_type == AWS_EVENT_STREAM_HEADER_UUID) {
                 struct aws_byte_cursor to_encode =
@@ -607,8 +607,8 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
                     aws_byte_cursor_from_array(header->header_value.variable_len_val, header->header_value_len);
                 aws_base64_encode(&to_encode, &encode_output);
             }
-            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "\"%s\"\n", encoded_buffer);
-            aws_mem_release(message->alloc, encoded_buffer);
+            fprintf(fd, "      " DEBUG_STR_HEADER_VALUE "\"" PRInSTR "\"\n", AWS_BYTE_BUF_PRI(encode_output));
+            aws_byte_buf_clean_up(&encode_output);
         }
 
         fprintf(fd, "    }");
@@ -627,13 +627,15 @@ int aws_event_stream_message_to_debug_str(FILE *fd, const struct aws_event_strea
     const uint8_t *payload = aws_event_stream_message_payload(message);
     size_t encoded_len = 0;
     aws_base64_compute_encoded_len(payload_len, &encoded_len);
-    char *encoded_payload = (char *)aws_mem_acquire(message->alloc, encoded_len);
 
     struct aws_byte_cursor payload_buffer = aws_byte_cursor_from_array(payload, payload_len);
-    struct aws_byte_buf encoded_payload_buffer = aws_byte_buf_from_array((uint8_t *)encoded_payload, encoded_len);
+    struct aws_byte_buf encoded_payload_buffer;
+    aws_byte_buf_init(&encoded_payload_buffer, message->alloc, encoded_len);
 
     aws_base64_encode(&payload_buffer, &encoded_payload_buffer);
-    fprintf(fd, "  \"payload\": \"%s\",\n", encoded_payload);
+    fprintf(fd, "  \"payload\": \"" PRInSTR "\",\n", AWS_BYTE_BUF_PRI(encoded_payload_buffer));
+    aws_byte_buf_clean_up(&encoded_payload_buffer);
+
     fprintf(fd, "  " DEBUG_STR_MESSAGE_CRC "%d\n}\n", aws_event_stream_message_message_crc(message));
 
     return AWS_OP_SUCCESS;
