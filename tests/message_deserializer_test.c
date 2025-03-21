@@ -14,17 +14,17 @@ static int s_test_outgoing_no_op_valid_fn(struct aws_allocator *allocator, void 
 
     struct aws_event_stream_message message;
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_message_from_buffer(&message, allocator, &test_buf),
         "Message validation should have succeeded");
 
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x00000010, aws_event_stream_message_total_length(&message), "Message length should have been 0x10");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x00000000, aws_event_stream_message_headers_len(&message), "Headers Length should have been 0x00");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x05c248eb, aws_event_stream_message_prelude_crc(&message), "Prelude CRC should have been 0x05c248eb");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x7d98c8ff, aws_event_stream_message_message_crc(&message), "Message CRC should have been 0x7d98c8ff");
 
     aws_event_stream_message_clean_up(&message);
@@ -43,32 +43,32 @@ static int s_test_outgoing_application_data_no_headers_valid_fn(struct aws_alloc
     struct aws_event_stream_message message;
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_message_from_buffer(&message, allocator, &test_buf),
         "Message validation should have succeeded");
 
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x0000001D, aws_event_stream_message_total_length(&message), "Message length should have been 0x0000001D");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x00000000, aws_event_stream_message_headers_len(&message), "Headers Length should have been 0x00");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0xfd528c5a, aws_event_stream_message_prelude_crc(&message), "Prelude CRC should have been 0xfd528c5a");
 
     const char *expected_str = "{'foo':'bar'}";
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         strlen(expected_str),
         aws_event_stream_message_payload_len(&message),
         "payload length should have been %d",
         (int)(strlen(expected_str)));
 
-    ASSERT_BIN_ARRAYS_EQUALS(
+    ASSERTF_BIN_ARRAYS_EQUALS(
         expected_str,
         strlen(expected_str),
         aws_event_stream_message_payload(&message),
         aws_event_stream_message_payload_len(&message),
         "payload should have been %s",
         expected_str);
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0xc3653936, aws_event_stream_message_message_crc(&message), "Message CRC should have been 0xc3653936");
 
     aws_event_stream_message_clean_up(&message);
@@ -90,25 +90,25 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
     struct aws_event_stream_message message;
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_message_from_buffer(&message, allocator, &test_buf),
         "Message validation should have succeeded");
 
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x0000003D, aws_event_stream_message_total_length(&message), "Message length should have been 0x0000003D");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x00000020, aws_event_stream_message_headers_len(&message), "Headers Length should have been 0x00000020");
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x07FD8396, aws_event_stream_message_prelude_crc(&message), "Prelude CRC should have been 0x07FD8396");
 
     const char *expected_str = "{'foo':'bar'}";
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         strlen(expected_str),
         aws_event_stream_message_payload_len(&message),
         "payload length should have been %d",
         (int)(strlen(expected_str)));
 
-    ASSERT_BIN_ARRAYS_EQUALS(
+    ASSERTF_BIN_ARRAYS_EQUALS(
         expected_str,
         strlen(expected_str),
         aws_event_stream_message_payload(&message),
@@ -117,12 +117,12 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
         expected_str);
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
+    ASSERTF_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
 
-    ASSERT_SUCCESS(aws_event_stream_message_headers(&message, &headers), "Header parsing should have succeeded");
-    ASSERT_INT_EQUALS(1, headers.length, "There should be exactly one header found");
+    ASSERTF_SUCCESS(aws_event_stream_message_headers(&message, &headers), "Header parsing should have succeeded");
+    ASSERTF_INT_EQUALS(1, headers.length, "There should be exactly one header found");
     struct aws_event_stream_header_value_pair header;
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_array_list_front(&headers, &header),
         "accessing the first element of an array of size 1 should have succeeded");
 
@@ -130,7 +130,7 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
     const char *content_type_value = "application/json";
 
     struct aws_byte_buf header_name_buf = aws_event_stream_header_name(&header);
-    ASSERT_BIN_ARRAYS_EQUALS(
+    ASSERTF_BIN_ARRAYS_EQUALS(
         content_type,
         strlen(content_type),
         header_name_buf.buffer,
@@ -140,7 +140,7 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
 
     struct aws_byte_buf header_value_buf = aws_event_stream_header_value_as_string(&header);
 
-    ASSERT_BIN_ARRAYS_EQUALS(
+    ASSERTF_BIN_ARRAYS_EQUALS(
         content_type_value,
         strlen(content_type_value),
         header_value_buf.buffer,
@@ -148,7 +148,7 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
         "header value should have been %s",
         content_type_value);
 
-    ASSERT_INT_EQUALS(
+    ASSERTF_INT_EQUALS(
         0x8D9C08B1, aws_event_stream_message_message_crc(&message), "Message CRC should have been 0x8D9C08B1");
 
     aws_event_stream_headers_list_cleanup(&headers);

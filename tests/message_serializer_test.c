@@ -12,7 +12,7 @@ static int s_test_incoming_no_op_valid_fn(struct aws_allocator *allocator, void 
         0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x05, 0xc2, 0x48, 0xeb, 0x7d, 0x98, 0xc8, 0xff};
 
     struct aws_event_stream_message message;
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_message_init(&message, allocator, NULL, NULL), "Message validation should have succeeded");
 
     ASSERT_BIN_ARRAYS_EQUALS(
@@ -37,7 +37,7 @@ static int s_test_incoming_application_data_no_headers_valid_fn(struct aws_alloc
     const char *test_str = "{'foo':'bar'}";
     struct aws_event_stream_message message;
     struct aws_byte_buf test_buf = aws_byte_buf_from_c_str(test_str);
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_message_init(&message, allocator, NULL, &test_buf),
         "Message validation should have succeeded");
 
@@ -67,19 +67,19 @@ static int s_test_incoming_application_one_compressed_header_pair_valid_fn(struc
     struct aws_event_stream_message message;
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
+    ASSERTF_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
 
     const char *header_name = "content-type";
     const char *header_value = "application/json";
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_add_string_header(
             &headers, header_name, (int8_t)strlen(header_name), header_value, (uint16_t)strlen(header_value), 0),
         "Adding a header should have succeeded.");
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_c_str(test_str);
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_message_init(&message, allocator, &headers, &test_buf),
         "Message validation should have succeeded");
 
@@ -110,17 +110,17 @@ static int s_test_incoming_application_int32_header_valid_fn(struct aws_allocato
     struct aws_event_stream_message message;
 
     struct aws_array_list headers;
-    ASSERT_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
+    ASSERTF_SUCCESS(aws_event_stream_headers_list_init(&headers, allocator), "Header initialization failed");
 
     const char *header_name = "event-id";
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_add_int32_header(&headers, header_name, (int8_t)strlen(header_name), 0x0000A00c),
         "Adding a header should have succeeded.");
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_c_str(test_str);
 
-    ASSERT_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers, &test_buf), "buffers didn't match");
+    ASSERTF_SUCCESS(aws_event_stream_message_init(&message, allocator, &headers, &test_buf), "buffers didn't match");
 
     ASSERT_BIN_ARRAYS_EQUALS(
         expected_data,

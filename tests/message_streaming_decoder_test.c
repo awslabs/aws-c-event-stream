@@ -122,9 +122,9 @@ static int s_test_streaming_decoder_incoming_no_op_valid_single_message_fn(struc
     aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x00000010, decoder_data.latest_prelude.total_len, "Message length should have been 0x10");
     ASSERT_INT_EQUALS(0x00000000, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x00");
@@ -167,9 +167,9 @@ static int s_test_streaming_decoder_incoming_application_no_headers_fn(struct aw
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x0000001D, decoder_data.latest_prelude.total_len, "Message length should have been 0x1D");
     ASSERT_INT_EQUALS(0x00000000, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x00");
@@ -235,9 +235,9 @@ static int s_test_streaming_decoder_incoming_application_one_compressed_header_p
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x0000003D, decoder_data.latest_prelude.total_len, "Message length should have been 0x3D");
     ASSERT_INT_EQUALS(0x00000020, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x20");
@@ -331,9 +331,9 @@ static int s_test_streaming_decoder_incoming_application_one_int32_header_pair_v
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x0000001B, decoder_data.latest_prelude.total_len, "Message length should have been 0x1B");
     ASSERT_INT_EQUALS(0x0000000B, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0xB");
@@ -402,9 +402,9 @@ static int s_test_streaming_decoder_incoming_application_variable_headers_with_e
     aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x00000022, decoder_data.latest_prelude.total_len);
     ASSERT_INT_EQUALS(0x00000012, decoder_data.latest_prelude.headers_len);
@@ -487,9 +487,9 @@ static int s_test_streaming_decoder_incoming_application_one_bool_header_pair_va
 
     struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
 
-    ASSERT_SUCCESS(
+    ASSERTF_SUCCESS(
         aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x00000017, decoder_data.latest_prelude.total_len, "Message length should have been 0x17");
     ASSERT_INT_EQUALS(0x00000007, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x7");
@@ -631,8 +631,8 @@ static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_all
 
     /* we should have written into the second message, but prior to the new prelude being found.
        check first message was parsed correctly */
-    ASSERT_SUCCESS(err_code, "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(err_code, "Message validation should have succeeded");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x00000010, decoder_data.latest_prelude.total_len, "Message length should have been 0x10");
     ASSERT_INT_EQUALS(0x00000000, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x00");
@@ -649,8 +649,8 @@ static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_all
     }
 
     /* Second message should have been found and fully parsed at this point. */
-    ASSERT_SUCCESS(err_code, "Message validation should have succeeded");
-    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+    ASSERTF_SUCCESS(err_code, "Message validation should have succeeded");
+    ASSERTF_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
 
     ASSERT_INT_EQUALS(0x0000003D, decoder_data.latest_prelude.total_len, "Message length should have been 0x3D");
     ASSERT_INT_EQUALS(0x00000020, decoder_data.latest_prelude.headers_len, "Headers Length should have been 0x20");
