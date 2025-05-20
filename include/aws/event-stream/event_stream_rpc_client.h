@@ -31,8 +31,8 @@ typedef void(aws_event_stream_rpc_client_stream_continuation_closed_fn)(
     void *user_data);
 
 /**
-* Invoked after a continuation has been fully destroyed.  Listeners know that no further callbacks are possible.
-*/
+ * Invoked after a continuation has been fully destroyed.  Listeners know that no further callbacks are possible.
+ */
 typedef void(aws_event_stream_rpc_client_stream_continuation_terminated_fn)(void *user_data);
 
 struct aws_event_stream_rpc_client_stream_continuation_options {
