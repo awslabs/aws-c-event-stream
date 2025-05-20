@@ -49,6 +49,7 @@ struct aws_event_stream_rpc_client_continuation_token {
     struct aws_event_stream_rpc_client_connection *connection;
     aws_event_stream_rpc_client_stream_continuation_fn *continuation_fn;
     aws_event_stream_rpc_client_stream_continuation_closed_fn *closed_fn;
+    aws_event_stream_rpc_client_stream_continuation_terminated_fn *terminated_fn;
     void *user_data;
     struct aws_atomic_var ref_count;
     struct aws_atomic_var is_closed;
@@ -915,6 +916,7 @@ struct aws_event_stream_rpc_client_continuation_token *aws_event_stream_rpc_clie
     aws_atomic_init_int(&continuation->is_complete, 0);
     continuation->continuation_fn = continuation_options->on_continuation;
     continuation->closed_fn = continuation_options->on_continuation_closed;
+    continuation->terminated_fn = continuation_options->on_continuation_terminated;
     continuation->user_data = continuation_options->user_data;
 
     return continuation;
@@ -959,7 +961,15 @@ void aws_event_stream_rpc_client_continuation_release(
     if (ref_count == 1) {
         struct aws_allocator *allocator = continuation_mut->connection->allocator;
         aws_event_stream_rpc_client_connection_release(continuation_mut->connection);
+
+        aws_event_stream_rpc_client_stream_continuation_terminated_fn *terminated_fn = continuation_mut->terminated_fn;
+        void *terminated_user_data = continuation_mut->user_data;
+
         aws_mem_release(allocator, continuation_mut);
+
+        if (terminated_fn) {
+            terminated_fn(terminated_user_data);
+        }
     }
 }
 
