@@ -39,6 +39,7 @@ struct aws_event_stream_rpc_client_connection {
     aws_event_stream_rpc_client_on_connection_setup_fn *on_connection_setup;
     aws_event_stream_rpc_client_connection_protocol_message_fn *on_connection_protocol_message;
     aws_event_stream_rpc_client_on_connection_shutdown_fn *on_connection_shutdown;
+    aws_event_stream_rpc_client_on_connection_terminated_fn *on_connection_terminated;
     void *user_data;
     bool bootstrap_owned;
     bool enable_read_back_pressure;
@@ -234,18 +235,31 @@ static int s_complete_and_clear_each_continuation(void *context, struct aws_hash
 static void s_clear_continuation_table(struct aws_event_stream_rpc_client_connection *connection) {
     AWS_ASSERT(!aws_event_stream_rpc_client_connection_is_open(connection));
 
+    struct aws_hash_table temp_table;
+    aws_hash_table_init(
+        &temp_table,
+        connection->allocator,
+        64,
+        aws_event_stream_rpc_hash_streamid,
+        aws_event_stream_rpc_streamid_eq,
+        NULL,
+        NULL);
+
     /* Use lock to ensure synchronization with code that adds entries to table.
      * Since connection was just marked closed, no further entries will be
-     * added to table once we acquire the lock. */
+     * added to table once we acquire the lock.
+     *
+     *  While no further entries can be added, there are concurrent execution paths where things can be
+     *  removed.  So rather than iterating the connection's table, swap it out for an empty one and iterate
+     *  the temporary table instead.  Removing from an empty table will be harmless.
+     */
     aws_mutex_lock(&connection->stream_lock);
-    aws_hash_table_foreach(&connection->continuation_table, s_mark_each_continuation_closed, NULL);
+    aws_hash_table_swap(&temp_table, &connection->continuation_table);
     aws_mutex_unlock(&connection->stream_lock);
 
-    /* Now release lock before invoking callbacks.
-     * It's safe to alter the table now without a lock, since no further
-     * entries can be added, and we've gone through the critical section
-     * above to ensure synchronization */
-    aws_hash_table_foreach(&connection->continuation_table, s_complete_and_clear_each_continuation, NULL);
+    aws_hash_table_foreach(&temp_table, s_mark_each_continuation_closed, NULL);
+    aws_hash_table_foreach(&temp_table, s_complete_and_clear_each_continuation, NULL);
+    aws_hash_table_clean_up(&temp_table);
 }
 
 int aws_event_stream_rpc_client_connection_connect(
@@ -277,6 +291,7 @@ int aws_event_stream_rpc_client_connection_connect(
     aws_mutex_init(&connection->stream_lock);
 
     connection->on_connection_shutdown = conn_options->on_connection_shutdown;
+    connection->on_connection_terminated = conn_options->on_connection_terminated;
     connection->on_connection_protocol_message = conn_options->on_connection_protocol_message;
     connection->on_connection_setup = conn_options->on_connection_setup;
     connection->user_data = conn_options->user_data;
@@ -341,7 +356,15 @@ static void s_destroy_connection(struct aws_event_stream_rpc_client_connection *
     AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: destroying connection.", (void *)connection);
     aws_hash_table_clean_up(&connection->continuation_table);
     aws_client_bootstrap_release(connection->bootstrap_ref);
+
+    aws_event_stream_rpc_client_on_connection_terminated_fn *terminated_fn = connection->on_connection_terminated;
+    void *terminated_user_data = connection->user_data;
+
     aws_mem_release(connection->allocator, connection);
+
+    if (terminated_fn) {
+        terminated_fn(terminated_user_data);
+    }
 }
 
 void aws_event_stream_rpc_client_connection_release(const struct aws_event_stream_rpc_client_connection *connection) {
