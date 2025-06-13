@@ -80,6 +80,11 @@ typedef void(aws_event_stream_rpc_client_on_connection_setup_fn)(
     void *user_data);
 
 /**
+ * Invoked when a connection has been completely destroyed.
+ */
+typedef void(aws_event_stream_rpc_client_on_connection_terminated_fn)(void *user_data);
+
+/**
  * Invoked whenever a message has been flushed to the channel.
  */
 typedef void(aws_event_stream_rpc_client_message_flush_fn)(int error_code, void *user_data);
@@ -99,6 +104,7 @@ struct aws_event_stream_rpc_client_connection_options {
     aws_event_stream_rpc_client_on_connection_setup_fn *on_connection_setup;
     aws_event_stream_rpc_client_connection_protocol_message_fn *on_connection_protocol_message;
     aws_event_stream_rpc_client_on_connection_shutdown_fn *on_connection_shutdown;
+    aws_event_stream_rpc_client_on_connection_terminated_fn *on_connection_terminated;
     void *user_data;
 };
 
