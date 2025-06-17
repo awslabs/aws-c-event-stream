@@ -14,6 +14,8 @@
 
 #include <inttypes.h>
 
+#include "aws/io/event_loop.h"
+
 #ifdef _MSC_VER
 /* allow declared initializer using address of automatic variable */
 #    pragma warning(disable : 4221)
@@ -28,6 +30,7 @@ struct aws_event_stream_rpc_client_connection {
     struct aws_allocator *allocator;
     struct aws_hash_table continuation_table;
     struct aws_client_bootstrap *bootstrap_ref;
+    struct aws_event_loop *event_loop;
     struct aws_atomic_var ref_count;
     struct aws_channel *channel;
     struct aws_channel_handler *event_stream_handler;
@@ -283,6 +286,8 @@ int aws_event_stream_rpc_client_connection_connect(
     connection->allocator = allocator;
     aws_atomic_init_int(&connection->ref_count, 1);
     connection->bootstrap_ref = conn_options->bootstrap;
+    connection->event_loop = aws_event_loop_group_get_next_loop(connection->bootstrap_ref->event_loop_group);
+
     /* this is released in the connection release which gets called regardless of if this function is successful or
      * not*/
     aws_client_bootstrap_acquire(connection->bootstrap_ref);
@@ -323,6 +328,7 @@ int aws_event_stream_rpc_client_connection_connect(
         .enable_read_back_pressure = false,
         .setup_callback = s_on_channel_setup_fn,
         .shutdown_callback = s_on_channel_shutdown_fn,
+        .requested_event_loop = connection->event_loop,
     };
 
     if (aws_client_bootstrap_new_socket_channel(&bootstrap_options)) {
@@ -1094,4 +1100,14 @@ int aws_event_stream_rpc_client_continuation_send_message(
 
     return s_send_protocol_message(
         continuation->connection, continuation, NULL, message_args, continuation->stream_id, flush_fn, user_data);
+}
+
+struct aws_event_loop *aws_event_stream_rpc_client_connection_get_event_loop(
+    const struct aws_event_stream_rpc_client_connection *connection) {
+
+    if (!connection) {
+        return NULL;
+    }
+
+    return connection->event_loop;
 }

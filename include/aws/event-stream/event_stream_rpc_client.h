@@ -10,6 +10,7 @@
 AWS_PUSH_SANE_WARNING_LEVEL
 
 struct aws_channel;
+struct aws_event_loop;
 struct aws_event_stream_rpc_client_connection;
 struct aws_event_stream_rpc_client_continuation_token;
 
@@ -153,6 +154,12 @@ AWS_EVENT_STREAM_API int aws_event_stream_rpc_client_connection_send_protocol_me
     const struct aws_event_stream_rpc_message_args *message_args,
     aws_event_stream_rpc_client_message_flush_fn *flush_fn,
     void *user_data);
+
+/**
+ * Returns the event loop that a connection is seated on.
+ */
+AWS_EVENT_STREAM_API struct aws_event_loop *aws_event_stream_rpc_client_connection_get_event_loop(
+    const struct aws_event_stream_rpc_client_connection *connection);
 
 /**
  * Create a new stream. continuation_option's callbacks will not be invoked, and nothing will be sent across the wire
