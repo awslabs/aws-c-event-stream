@@ -800,7 +800,6 @@ static void s_route_message_by_type(
         aws_mutex_unlock(&connection->stream_lock);
 
         continuation->continuation_fn(continuation, &message_args, continuation->user_data);
-        aws_event_stream_rpc_client_continuation_release(continuation);
 
         /* if it was a terminal stream message purge it from the hash table. The delete will decref the continuation. */
         if (message_flags & AWS_EVENT_STREAM_RPC_MESSAGE_FLAG_TERMINATE_STREAM) {
@@ -817,6 +816,8 @@ static void s_route_message_by_type(
             /* Note that we do not invoke callback while holding lock */
             s_complete_continuation(continuation);
         }
+
+        aws_event_stream_rpc_client_continuation_release(continuation);
     } else {
         if (message_type <= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_APPLICATION_ERROR ||
             message_type >= AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_COUNT) {
