@@ -192,9 +192,7 @@ static void s_on_channel_shutdown_fn(
     aws_event_stream_rpc_client_connection_release(connection);
 }
 
-/* Set each continuation's is_closed=true.
- * A lock MUST be held while calling this.
- * For use with aws_hash_table_foreach(). */
+/* Set each continuation's is_closed=true. */
 static int s_mark_each_continuation_closed(void *context, struct aws_hash_element *p_element) {
     (void)context;
     struct aws_event_stream_rpc_client_continuation_token *continuation = p_element->value;
