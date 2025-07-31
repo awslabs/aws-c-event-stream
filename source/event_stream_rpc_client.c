@@ -44,7 +44,7 @@ struct aws_event_stream_rpc_client_connection {
     struct aws_channel_handler *event_stream_handler;
 
     /* lock and synchronized data */
-    struct aws_mutex stream_lock;
+    struct aws_mutex lock;
     struct {
         struct aws_hash_table continuation_table;
         uint32_t latest_stream_id;
@@ -151,12 +151,11 @@ static void s_on_channel_setup_fn(
         (void *)channel);
 
     if (!error_code) {
-        /* Q: Did we fix DNS failures to always call back on the event loop in general or just for MQTT5? */
         AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(connection->event_loop));
 
-        aws_mutex_lock(&connection->stream_lock);
+        aws_mutex_lock(&connection->lock);
         connection->synced_data.bootstrap_owned = true;
-        aws_mutex_unlock(&connection->stream_lock);
+        aws_mutex_unlock(&connection->lock);
 
         if (s_create_connection_on_channel(connection, channel)) {
             int last_error = aws_last_error();
@@ -210,10 +209,10 @@ static void s_on_channel_shutdown_fn(
         (void *)channel);
 
     bool is_externally_visible_shutdown = false;
-    aws_mutex_lock(&connection->stream_lock);
+    aws_mutex_lock(&connection->lock);
     connection->synced_data.is_open = false;
     is_externally_visible_shutdown = connection->synced_data.bootstrap_owned;
-    aws_mutex_unlock(&connection->stream_lock);
+    aws_mutex_unlock(&connection->lock);
 
     connection->channel = NULL;
     connection->event_stream_handler = NULL;
@@ -292,9 +291,9 @@ static void s_clear_continuation_table(struct aws_event_stream_rpc_client_connec
      *  removed.  So rather than iterating the connection's table, swap it out for an empty one and iterate
      *  the temporary table instead.  Removing from an empty table will be harmless.
      */
-    aws_mutex_lock(&connection->stream_lock);
+    aws_mutex_lock(&connection->lock);
     aws_hash_table_swap(&temp_table, &connection->synced_data.continuation_table);
-    aws_mutex_unlock(&connection->stream_lock);
+    aws_mutex_unlock(&connection->lock);
 
     aws_hash_table_foreach(&temp_table, s_mark_each_continuation_closed, NULL);
     aws_hash_table_foreach(&temp_table, s_complete_and_clear_each_continuation, NULL);
@@ -325,7 +324,7 @@ int aws_event_stream_rpc_client_connection_connect(
     aws_client_bootstrap_acquire(connection->bootstrap_ref);
     connection->synced_data.handshake_state = CONNECTION_HANDSHAKE_STATE_INITIALIZED;
     connection->synced_data.is_open = true;
-    aws_mutex_init(&connection->stream_lock);
+    aws_mutex_init(&connection->lock);
 
     connection->on_connection_shutdown = conn_options->on_connection_shutdown;
     connection->on_connection_terminated = conn_options->on_connection_terminated;
@@ -393,7 +392,7 @@ static void s_destroy_connection(struct aws_event_stream_rpc_client_connection *
     AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: destroying connection.", (void *)connection);
     aws_hash_table_clean_up(&connection->synced_data.continuation_table);
     aws_client_bootstrap_release(connection->bootstrap_ref);
-    aws_mutex_clean_up(&connection->stream_lock);
+    aws_mutex_clean_up(&connection->lock);
 
     aws_event_stream_rpc_client_on_connection_terminated_fn *terminated_fn = connection->on_connection_terminated;
     void *terminated_user_data = connection->user_data;
@@ -482,10 +481,10 @@ void aws_event_stream_rpc_client_connection_close(
         aws_error_debug_str(shutdown_error_code));
 
     bool should_close = false;
-    aws_mutex_lock(&connection->stream_lock);
+    aws_mutex_lock(&connection->lock);
     should_close = connection->synced_data.is_open;
     connection->synced_data.is_open = false;
-    aws_mutex_unlock(&connection->stream_lock);
+    aws_mutex_unlock(&connection->lock);
 
     if (should_close) {
         /* We may need to access the channel, which is only allowed on the event loop thread. */
@@ -502,9 +501,9 @@ bool aws_event_stream_rpc_client_connection_is_open(const struct aws_event_strea
         (struct aws_event_stream_rpc_client_connection *)connection;
 
     bool is_open = false;
-    aws_mutex_lock(&mutable_connection->stream_lock);
+    aws_mutex_lock(&mutable_connection->lock);
     is_open = connection->synced_data.is_open;
-    aws_mutex_unlock(&mutable_connection->stream_lock);
+    aws_mutex_unlock(&mutable_connection->lock);
 
     return is_open;
 }
@@ -710,13 +709,13 @@ static void s_on_protocol_message_written_fn(
         aws_atomic_store_int(&message_args->continuation->is_closed, 1U);
 
         int was_present = 0;
-        aws_mutex_lock(&message_args->connection->stream_lock);
+        aws_mutex_lock(&message_args->connection->lock);
         aws_hash_table_remove(
             &message_args->connection->synced_data.continuation_table,
             &message_args->continuation->stream_id,
             NULL,
             &was_present);
-        aws_mutex_unlock(&message_args->connection->stream_lock);
+        aws_mutex_unlock(&message_args->connection->lock);
 
         /*
          * Whoever successfully removes the continuation from the table gets to complete it.
@@ -755,7 +754,7 @@ static void s_send_message_task_fn(struct aws_task *task, void *arg, enum aws_ta
     if (status == AWS_TASK_STATUS_RUN_READY) {
         bool is_open = false;
         bool is_handshake_state_valid = false;
-        aws_mutex_lock(&connection->stream_lock);
+        aws_mutex_lock(&connection->lock);
 
         is_open = connection->synced_data.is_open;
         switch (connection->synced_data.handshake_state) {
@@ -776,7 +775,7 @@ static void s_send_message_task_fn(struct aws_task *task, void *arg, enum aws_ta
                 break;
         }
 
-        aws_mutex_unlock(&connection->stream_lock);
+        aws_mutex_unlock(&connection->lock);
 
         if (!is_open) {
             AWS_LOGF_INFO(
@@ -949,9 +948,9 @@ static void s_route_message_by_type(
         .message_type = message_type,
     };
 
-    aws_mutex_lock(&connection->stream_lock);
+    aws_mutex_lock(&connection->lock);
     enum aws_event_stream_connection_handshake_state handshake_state = connection->synced_data.handshake_state;
-    aws_mutex_unlock(&connection->stream_lock);
+    aws_mutex_unlock(&connection->lock);
 
     /* make sure if this is not a CONNECT message being received, the handshake has been completed. */
     if (handshake_state < CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED &&
@@ -983,12 +982,12 @@ static void s_route_message_by_type(
             return;
         }
 
-        aws_mutex_lock(&connection->stream_lock);
+        aws_mutex_lock(&connection->lock);
         struct aws_hash_element *continuation_element = NULL;
         if (aws_hash_table_find(&connection->synced_data.continuation_table, &stream_id, &continuation_element) ||
             !continuation_element) {
             bool old_stream_id = stream_id <= connection->synced_data.latest_stream_id;
-            aws_mutex_unlock(&connection->stream_lock);
+            aws_mutex_unlock(&connection->lock);
             if (!old_stream_id) {
                 AWS_LOGF_ERROR(
                     AWS_LS_EVENT_STREAM_RPC_CLIENT,
@@ -1010,7 +1009,7 @@ static void s_route_message_by_type(
         AWS_FATAL_ASSERT(continuation != NULL);
         aws_event_stream_rpc_client_continuation_acquire(continuation);
 
-        aws_mutex_unlock(&connection->stream_lock);
+        aws_mutex_unlock(&connection->lock);
 
         continuation->continuation_fn(continuation, &message_args, continuation->user_data);
 
@@ -1023,9 +1022,9 @@ static void s_route_message_by_type(
                 (void *)continuation);
             aws_atomic_store_int(&continuation->is_closed, 1U);
             int was_present = 0;
-            aws_mutex_lock(&connection->stream_lock);
+            aws_mutex_lock(&connection->lock);
             aws_hash_table_remove(&connection->synced_data.continuation_table, &stream_id, NULL, &was_present);
-            aws_mutex_unlock(&connection->stream_lock);
+            aws_mutex_unlock(&connection->lock);
 
             /*
              * Whoever successfully removes the continuation from the table gets to complete it.
@@ -1051,13 +1050,13 @@ static void s_route_message_by_type(
         }
 
         if (message_type == AWS_EVENT_STREAM_RPC_MESSAGE_TYPE_CONNECT_ACK) {
-            aws_mutex_lock(&connection->stream_lock);
+            aws_mutex_lock(&connection->lock);
             bool bad_handshake_state =
                 connection->synced_data.handshake_state != CONNECTION_HANDSHAKE_STATE_CONNECT_PROCESSED;
             if (!bad_handshake_state) {
                 connection->synced_data.handshake_state = CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED;
             }
-            aws_mutex_unlock(&connection->stream_lock);
+            aws_mutex_unlock(&connection->lock);
 
             if (bad_handshake_state) {
                 AWS_LOGF_ERROR(
@@ -1251,7 +1250,7 @@ int aws_event_stream_rpc_client_continuation_activate(
         return aws_raise_error(AWS_ERROR_INVALID_STATE);
     }
 
-    aws_mutex_lock(&continuation->connection->stream_lock);
+    aws_mutex_lock(&continuation->connection->lock);
 
     continuation->stream_id = continuation->connection->synced_data.latest_stream_id + 1;
     AWS_LOGF_DEBUG(
@@ -1307,7 +1306,7 @@ int aws_event_stream_rpc_client_continuation_activate(
     ret_val = AWS_OP_SUCCESS;
 
 clean_up:
-    aws_mutex_unlock(&continuation->connection->stream_lock);
+    aws_mutex_unlock(&continuation->connection->lock);
     return ret_val;
 }
 
