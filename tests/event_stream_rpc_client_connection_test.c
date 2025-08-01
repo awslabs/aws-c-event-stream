@@ -28,6 +28,7 @@ struct client_test_data {
     struct aws_event_stream_rpc_server_continuation_token *server_token;
     struct aws_byte_buf last_seen_operation_name;
     bool client_message_sent;
+    int client_message_sent_error_code;
     bool client_message_received;
     bool server_message_sent;
     bool server_message_received;
@@ -406,11 +407,14 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_data)
 
 static void s_rpc_client_message_flush(int error_code, void *user_data) {
-    (void)error_code;
 
     struct client_test_data *client_test_data = user_data;
     aws_mutex_lock(&client_test_data->sync_lock);
-    client_test_data->client_message_sent = true;
+    if (error_code == AWS_ERROR_SUCCESS) {
+        client_test_data->client_message_sent = true;
+    } else {
+        client_test_data->client_message_sent_error_code = error_code;
+    }
     aws_condition_variable_notify_one(&client_test_data->sync_cvar);
     /* make these pessimistic to prevent a cleanup race. */
     aws_mutex_unlock(&client_test_data->sync_lock);
@@ -430,6 +434,11 @@ static void s_rpc_server_message_flush(int error_code, void *user_data) {
 static bool s_rpc_client_message_transmission_completed_pred(void *arg) {
     struct client_test_data *client_test_data = arg;
     return client_test_data->client_message_sent && client_test_data->server_message_received;
+}
+
+static bool s_rpc_client_message_transmission_error_pred(void *arg) {
+    struct client_test_data *client_test_data = arg;
+    return client_test_data->client_message_sent_error_code != AWS_ERROR_SUCCESS;
 }
 
 static bool s_rpc_server_message_transmission_completed_pred(void *arg) {
@@ -566,10 +575,20 @@ static int s_test_event_stream_rpc_client_connection_message_before_connect(
         .payload = &ping_payload,
     };
 
-    ASSERT_ERROR(
-        AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR,
-        aws_event_stream_rpc_client_connection_send_protocol_message(
-            test_data->client_connection, &connect_args, s_rpc_client_message_flush, NULL));
+    aws_event_stream_rpc_client_connection_send_protocol_message(
+        test_data->client_connection, &connect_args, s_rpc_client_message_flush, &test_data->client_test_data);
+
+    aws_mutex_lock(&test_data->client_test_data.sync_lock);
+    aws_condition_variable_wait_pred(
+        &test_data->client_test_data.sync_cvar,
+        &test_data->client_test_data.sync_lock,
+        s_rpc_client_message_transmission_error_pred,
+        &test_data->client_test_data);
+
+    ASSERT_INT_EQUALS(
+        AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR, test_data->client_test_data.client_message_sent_error_code);
+
+    aws_mutex_unlock(&test_data->client_test_data.sync_lock);
 
     aws_event_stream_rpc_client_connection_close(test_data->client_connection, AWS_ERROR_SUCCESS);
     aws_event_stream_rpc_server_connection_close(test_data->server_connection, AWS_ERROR_SUCCESS);
