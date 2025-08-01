@@ -1252,58 +1252,76 @@ int aws_event_stream_rpc_client_continuation_activate(
 
     aws_mutex_lock(&continuation->connection->lock);
 
-    continuation->stream_id = continuation->connection->synced_data.latest_stream_id + 1;
-    AWS_LOGF_DEBUG(
-        AWS_LS_EVENT_STREAM_RPC_CLIENT,
-        "id=%p: continuation's new stream id is %" PRIu32,
-        (void *)continuation,
-        continuation->stream_id);
-
-    if (aws_hash_table_put(
-            &continuation->connection->synced_data.continuation_table, &continuation->stream_id, continuation, NULL)) {
-        AWS_LOGF_ERROR(
+    if (continuation->connection->synced_data.is_open &&
+        continuation->connection->synced_data.handshake_state == CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED) {
+        continuation->stream_id = continuation->connection->synced_data.latest_stream_id + 1;
+        AWS_LOGF_DEBUG(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
-            "id=%p: storing the new stream failed with %s",
+            "id=%p: continuation's new stream id is %" PRIu32,
             (void *)continuation,
-            aws_error_debug_str(aws_last_error()));
-        continuation->stream_id = 0;
-        goto clean_up;
+            continuation->stream_id);
+
+        if (aws_hash_table_put(
+                &continuation->connection->synced_data.continuation_table,
+                &continuation->stream_id,
+                continuation,
+                NULL)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_CLIENT,
+                "id=%p: storing the new stream failed with %s",
+                (void *)continuation,
+                aws_error_debug_str(aws_last_error()));
+            continuation->stream_id = 0;
+            goto clean_up;
+        }
+
+        /*
+         * In the original event stream, this was a synchronous operation and so the stream id increment happened after
+         * flush callback.  Post-refactor, this submits an async cross-thread task to the event loop that sends the
+         * message.
+         *
+         * Cross thread tasks are handled in-order and we hold the lock while allocating and submitting the task, so we
+         * know that the send tasks will be processed in stream id order on the event loop.  The question remains, what
+         * happens if there's a failure to send; will that disrupt stream id order due to a need to rewind?  The answer
+         * is no because any failures to send after this point are connection-fatal, so it doesn't matter that the
+         * stream ids get out-of-order.
+         */
+        if (s_send_protocol_message(
+                continuation->connection,
+                continuation,
+                &operation_name,
+                message_args,
+                continuation->stream_id,
+                flush_fn,
+                user_data)) {
+            aws_hash_table_remove(
+                &continuation->connection->synced_data.continuation_table, &continuation->stream_id, NULL, NULL);
+            continuation->stream_id = 0;
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_CLIENT,
+                "id=%p: failed to flush the new stream to the channel with error %s",
+                (void *)continuation,
+                aws_error_debug_str(aws_last_error()));
+            goto clean_up;
+        }
+
+        /* The continuation table gets a ref count on the continuation. Take it here. */
+        aws_event_stream_rpc_client_continuation_acquire(continuation);
+
+        continuation->connection->synced_data.latest_stream_id = continuation->stream_id;
+        ret_val = AWS_OP_SUCCESS;
+    } else {
+        /*
+         * This catches two cases:
+         *
+         * (1) Attempting to activate a continuation before the connack is processed.  This would result in a protocol
+         *  error that would shut down the channel, so fail it before that can happen.
+         * (2) Attempting to activate a continuation after the channel has gone down.  This leads to a situation where
+         *  the activate is guaranteed to fail but the table cleanup may already have run before we insert ourselves,
+         *  creating an orphaned continuation that leaks.
+         */
+        aws_raise_error(AWS_ERROR_EVENT_STREAM_RPC_CONNECTION_CLOSED);
     }
-
-    /*
-     * In the original event stream, this was a synchronous operation and so the stream id increment happened after
-     * flush callback.  Post-refactor, this submits an async cross-thread task to the event loop that sends the message.
-     *
-     * Cross thread tasks are handled in-order and we hold the lock while allocating and submitting the task, so we
-     * know that the send tasks will be processed in stream id order on the event loop.  The question remains, what
-     * happens if there's a failure to send; will that disrupt stream id order due to a need to rewind?  The answer is
-     * no because any failures to send after this point are connection-fatal, so it doesn't matter that the stream ids
-     * get out-of-order.
-     */
-    if (s_send_protocol_message(
-            continuation->connection,
-            continuation,
-            &operation_name,
-            message_args,
-            continuation->stream_id,
-            flush_fn,
-            user_data)) {
-        aws_hash_table_remove(
-            &continuation->connection->synced_data.continuation_table, &continuation->stream_id, NULL, NULL);
-        continuation->stream_id = 0;
-        AWS_LOGF_ERROR(
-            AWS_LS_EVENT_STREAM_RPC_CLIENT,
-            "id=%p: failed to flush the new stream to the channel with error %s",
-            (void *)continuation,
-            aws_error_debug_str(aws_last_error()));
-        goto clean_up;
-    }
-
-    /* The continuation table gets a ref count on the continuation. Take it here. */
-    aws_event_stream_rpc_client_continuation_acquire(continuation);
-
-    continuation->connection->synced_data.latest_stream_id = continuation->stream_id;
-    ret_val = AWS_OP_SUCCESS;
 
 clean_up:
     aws_mutex_unlock(&continuation->connection->lock);
