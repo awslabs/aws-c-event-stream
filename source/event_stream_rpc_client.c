@@ -42,6 +42,7 @@ struct aws_event_stream_rpc_client_connection {
     /* private to event loop thread.  unsafe to access otherwise. */
     struct aws_channel *channel;
     struct aws_channel_handler *event_stream_handler;
+    bool bootstrap_owned;
 
     /* lock and synchronized data */
     struct aws_mutex lock;
@@ -50,7 +51,6 @@ struct aws_event_stream_rpc_client_connection {
         uint32_t latest_stream_id;
         bool is_open;
         enum aws_event_stream_connection_handshake_state handshake_state;
-        bool bootstrap_owned;
     } synced_data;
 };
 
@@ -152,10 +152,7 @@ static void s_on_channel_setup_fn(
 
     if (!error_code) {
         AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(connection->event_loop));
-
-        aws_mutex_lock(&connection->lock);
-        connection->synced_data.bootstrap_owned = true;
-        aws_mutex_unlock(&connection->lock);
+        connection->bootstrap_owned = true;
 
         if (s_create_connection_on_channel(connection, channel)) {
             int last_error = aws_last_error();
@@ -208,12 +205,11 @@ static void s_on_channel_shutdown_fn(
         error_code,
         (void *)channel);
 
-    bool is_externally_visible_shutdown = false;
     aws_mutex_lock(&connection->lock);
     connection->synced_data.is_open = false;
-    is_externally_visible_shutdown = connection->synced_data.bootstrap_owned;
     aws_mutex_unlock(&connection->lock);
 
+    bool is_externally_visible_shutdown = connection->bootstrap_owned;
     connection->channel = NULL;
     connection->event_stream_handler = NULL;
 
