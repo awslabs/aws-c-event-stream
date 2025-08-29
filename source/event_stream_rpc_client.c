@@ -1267,7 +1267,15 @@ int aws_event_stream_rpc_client_continuation_activate(
 
     if (continuation->connection->synced_data.is_open &&
         continuation->connection->synced_data.handshake_state == CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED) {
-        continuation->stream_id = continuation->connection->synced_data.latest_stream_id + 1;
+
+        /* temporary to cause a catastrophic failure when using GG IPC */
+        struct aws_byte_cursor publish_op_name = aws_byte_cursor_from_c_str("aws.greengrass#PublishToTopic");
+        if (aws_byte_cursor_eq(&operation_name, &publish_op_name)) {
+            continuation->stream_id = 9999; // this will cause the server to drop the connection
+        } else {
+            continuation->stream_id = continuation->connection->synced_data.latest_stream_id + 1;
+        }
+        
         AWS_LOGF_DEBUG(
             AWS_LS_EVENT_STREAM_RPC_CLIENT,
             "id=%p: continuation's new stream id is %" PRIu32,
