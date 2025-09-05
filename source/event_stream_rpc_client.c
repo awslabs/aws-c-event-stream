@@ -887,7 +887,7 @@ static int s_send_protocol_message(
 
     struct aws_event_stream_client_connection_send_message_task *task =
         s_aws_event_stream_client_connection_send_message_task_new(connection->allocator, args);
-    aws_event_loop_schedule_task_now(connection->event_loop, &task->base);
+    aws_event_loop_schedule_task_now_serialized(connection->event_loop, &task->base);
 
     return AWS_OP_SUCCESS;
 }
