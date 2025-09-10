@@ -801,8 +801,8 @@ static void s_send_message_task_fn(struct aws_task *task, void *arg, enum aws_ta
             if (aws_event_stream_rpc_client_continuation_is_closed(message_args->continuation)) {
                 AWS_LOGF_INFO(
                     AWS_LS_EVENT_STREAM_RPC_CLIENT,
-                    "id=%p: cannot send, continuation is already closed",
-                    (void *)connection);
+                    "id=%p: continuation closed, cannot send messages",
+                    (void *)message_args->continuation);
 
                 failure_error_code = AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED;
                 goto should_fail_block;
