@@ -13,6 +13,8 @@
  * permissions and limitations under the License.
  */
 
+#include "aws/io/future.h"
+
 #include <aws/event-stream/event_stream_channel_handler.h>
 #include <aws/event-stream/event_stream_rpc_server.h>
 #include <aws/event-stream/private/event_stream_rpc_priv.h>
@@ -48,6 +50,7 @@ struct aws_event_stream_rpc_server_listener {
     bool enable_read_backpressure;
     bool initialized;
     void *user_data;
+    struct aws_future_void *setup_future;
 };
 
 struct aws_event_stream_rpc_server_connection {
@@ -256,6 +259,22 @@ void aws_event_stream_rpc_server_connection_release(struct aws_event_stream_rpc_
     }
 }
 
+static void s_on_server_listener_setup(struct aws_server_bootstrap *bootstrap, int error_code, void *user_data) {
+    (void)bootstrap;
+    struct aws_event_stream_rpc_server_listener *server = user_data;
+    AWS_LOGF_DEBUG(
+        AWS_LS_EVENT_STREAM_RPC_SERVER,
+        "id=%p: listener setup completed with error %s",
+        (void *)server,
+        aws_error_debug_str(error_code));
+
+    if (error_code) {
+        aws_future_void_set_error(server->setup_future, error_code);
+    } else {
+        aws_future_void_set_result(server->setup_future);
+    }
+}
+
 /* incoming from a socket on this listener. */
 static void s_on_accept_channel_setup(
     struct aws_server_bootstrap *bootstrap,
@@ -373,6 +392,7 @@ static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap,
             listener->on_destroy_callback(listener, listener->user_data);
         }
 
+        aws_future_void_release(listener->setup_future);
         aws_mem_release(listener->allocator, listener);
     }
 }
@@ -401,6 +421,7 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         .enable_read_back_pressure = false,
         .host_name = options->host_name,
         .port = options->port,
+        .setup_callback = s_on_server_listener_setup,
         .incoming_callback = s_on_accept_channel_setup,
         .shutdown_callback = s_on_accept_channel_shutdown,
         .destroy_callback = s_on_server_listener_destroy,
@@ -413,6 +434,7 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     server->on_new_connection = options->on_new_connection;
     server->on_connection_shutdown = options->on_connection_shutdown;
     server->user_data = options->user_data;
+    server->setup_future = aws_future_void_new(allocator);
 
     server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
 
@@ -424,14 +446,25 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         goto error;
     }
 
+    /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and listening) is
+     * happening asynchronously in the dispatch queue event loop. */
+    aws_future_void_wait(server->setup_future, UINT64_MAX /*timeout*/);
+    int listen_error = aws_future_void_get_error(server->setup_future);
+
+    if (listen_error) {
+        AWS_LOGF_ERROR(
+            AWS_LS_EVENT_STREAM_RPC_SERVER,
+            "static: failed to setup new socket listener with error %s",
+            aws_error_debug_str(listen_error));
+        goto error;
+    }
+
     server->initialized = true;
     return server;
 
 error:
-    if (server->listener) {
-        aws_server_bootstrap_destroy_socket_listener(options->bootstrap, server->listener);
-    }
-
+    /* No need to release server->listener as this is handled by bootstrap. */
+    aws_future_void_release(server->setup_future);
     aws_mem_release(server->allocator, server);
     return NULL;
 }
@@ -456,14 +489,6 @@ void aws_event_stream_rpc_server_listener_acquire(struct aws_event_stream_rpc_se
         current_count + 1);
 }
 
-static void s_destroy_server(struct aws_event_stream_rpc_server_listener *server) {
-    if (server) {
-        AWS_LOGF_INFO(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying server", (void *)server);
-        /* the memory for this is cleaned up in the listener shutdown complete callback. */
-        aws_server_bootstrap_destroy_socket_listener(server->bootstrap, server->listener);
-    }
-}
-
 void aws_event_stream_rpc_server_listener_release(struct aws_event_stream_rpc_server_listener *server) {
     if (!server) {
         return;
@@ -474,7 +499,9 @@ void aws_event_stream_rpc_server_listener_release(struct aws_event_stream_rpc_se
         AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: server released, new ref count is %zu.", (void *)server, ref_count - 1);
 
     if (ref_count == 1) {
-        s_destroy_server(server);
+        AWS_LOGF_INFO(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: ref count reached 0, destroying server", (void *)server);
+        /* the memory for this is cleaned up in the listener shutdown complete callback. */
+        aws_server_bootstrap_destroy_socket_listener(server->bootstrap, server->listener);
     }
 }
 
