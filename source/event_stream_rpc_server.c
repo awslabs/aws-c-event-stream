@@ -446,6 +446,11 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         goto error;
     }
 
+    /* If aws_server_bootstrap_new_socket_listener succeeded, we should assume that the server was initialized. If the
+     * followup steps (e.g the actual binding or listening for nw_socket) fail, the cleaning up callbacks are already
+     * setup, and they'll destroy the server. */
+    server->initialized = true;
+
     /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and listening) is
      * happening asynchronously in the dispatch queue event loop. */
     aws_future_void_wait(server->setup_future, UINT64_MAX /*timeout*/);
@@ -459,13 +464,13 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         goto error;
     }
 
-    server->initialized = true;
     return server;
 
 error:
-    /* No need to release server->listener as this is handled by bootstrap. */
-    aws_future_void_release(server->setup_future);
-    aws_mem_release(server->allocator, server);
+    if (!server->initialized) {
+        aws_future_void_release(server->setup_future);
+        aws_mem_release(server->allocator, server);
+    }
     return NULL;
 }
 
