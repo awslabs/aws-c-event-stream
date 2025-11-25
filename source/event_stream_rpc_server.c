@@ -380,21 +380,23 @@ static void s_on_accept_channel_shutdown(
 
 static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap, void *user_data) {
     (void)bootstrap;
-    struct aws_event_stream_rpc_server_listener *listener = user_data;
+    struct aws_event_stream_rpc_server_listener *server = user_data;
 
-    AWS_LOGF_INFO(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying server", (void *)listener);
+    AWS_LOGF_INFO(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying server", (void *)server);
 
     /* server bootstrap invokes this callback regardless of if the listener was successfully created, so
      * just check that we successfully set it up before freeing anything. When that's fixed in aws-c-io, this
      * code will still be correct, so just leave it here for now. */
-    if (listener->initialized) {
-        if (listener->on_destroy_callback) {
-            listener->on_destroy_callback(listener, listener->user_data);
-        }
 
-        aws_future_void_release(listener->setup_future);
-        aws_mem_release(listener->allocator, listener);
+    /* Call a user-provided destruction callback only if the server initialization was successful. If initialization
+     * failed, the calling side got NULL from aws_event_stream_rpc_server_new_listener and doesn't expect anything to
+     * be called from the event stream server's internals. */
+    if (server->initialized && server->on_destroy_callback) {
+        server->on_destroy_callback(server, server->user_data);
     }
+
+    aws_future_void_release(server->setup_future);
+    aws_mem_release(server->allocator, server);
 }
 
 struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_listener(
@@ -437,7 +439,6 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     server->setup_future = aws_future_void_new(allocator);
 
     server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
-
     if (!server->listener) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_SERVER,
@@ -445,11 +446,6 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
             aws_error_debug_str(aws_last_error()));
         goto error;
     }
-
-    /* If aws_server_bootstrap_new_socket_listener succeeded, we should assume that the server was initialized. If the
-     * followup steps (e.g the actual binding or listening for nw_socket) fail, the cleaning up callbacks are already
-     * setup, and they'll destroy the server. */
-    server->initialized = true;
 
     /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and listening) is
      * happening asynchronously in the dispatch queue event loop. */
@@ -464,13 +460,12 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         goto error;
     }
 
+    server->initialized = true;
     return server;
 
 error:
-    if (!server->initialized) {
-        aws_future_void_release(server->setup_future);
-        aws_mem_release(server->allocator, server);
-    }
+    /* Even if aws_server_bootstrap_new_socket_listener fails, the bootstrap_options.destroy_callback will still
+     * be fired. So, to avoid a race condition we delegate all cleaning up to that callback.  */
     return NULL;
 }
 
