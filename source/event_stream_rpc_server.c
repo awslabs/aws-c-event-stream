@@ -395,23 +395,15 @@ static void s_on_server_listener_destroy(struct aws_server_bootstrap *bootstrap,
         server->on_destroy_callback(server, server->user_data);
     }
 
-    aws_future_void_release(server->setup_future);
     aws_mem_release(server->allocator, server);
 }
 
 struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_listener(
     struct aws_allocator *allocator,
     struct aws_event_stream_rpc_server_listener_options *options) {
+    struct aws_event_stream_rpc_server_listener *result = NULL;
     struct aws_event_stream_rpc_server_listener *server =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_event_stream_rpc_server_listener));
-
-    if (!server) {
-        AWS_LOGF_ERROR(
-            AWS_LS_EVENT_STREAM_RPC_SERVER,
-            "static: failed to allocate new server with error %s",
-            aws_error_debug_str(aws_last_error()));
-        return NULL;
-    }
 
     AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "static: new server is %p", (void *)server);
     aws_atomic_init_int(&server->ref_count, 1);
@@ -437,6 +429,7 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     server->on_connection_shutdown = options->on_connection_shutdown;
     server->user_data = options->user_data;
     server->setup_future = aws_future_void_new(allocator);
+    struct aws_future_void *setup_future = server->setup_future;
 
     server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
     if (!server->listener) {
@@ -444,29 +437,32 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
             AWS_LS_EVENT_STREAM_RPC_SERVER,
             "static: failed to allocate new socket listener with error %s",
             aws_error_debug_str(aws_last_error()));
-        goto error;
+        goto done;
     }
 
     /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and listening) is
-     * happening asynchronously in the dispatch queue event loop. */
-    aws_future_void_wait(server->setup_future, UINT64_MAX /*timeout*/);
-    int listen_error = aws_future_void_get_error(server->setup_future);
+     * happening asynchronously in the dispatch queue event loop.
+     * In case of a failure, the server destruction can be already in progress in the event loop thread. */
+    aws_future_void_wait(setup_future, UINT64_MAX /*timeout*/);
+    int listen_error = aws_future_void_get_error(setup_future);
 
     if (listen_error) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_SERVER,
             "static: failed to setup new socket listener with error %s",
             aws_error_debug_str(listen_error));
-        goto error;
+        aws_raise_error(listen_error);
+        goto done;
     }
 
     server->initialized = true;
-    return server;
+    result = server;
 
-error:
+done:
     /* Even if aws_server_bootstrap_new_socket_listener fails, the bootstrap_options.destroy_callback will still
-     * be fired. So, to avoid a race condition we delegate all cleaning up to that callback.  */
-    return NULL;
+     * be fired. So, to avoid a race condition we delegate server's destruction to that callback. */
+    aws_future_void_release(setup_future);
+    return result;
 }
 
 uint32_t aws_event_stream_rpc_server_listener_get_bound_port(
