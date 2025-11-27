@@ -20,6 +20,7 @@
 #include <aws/event-stream/private/event_stream_rpc_priv.h>
 
 #include <aws/common/atomics.h>
+#include <aws/common/clock.h>
 #include <aws/common/hash_table.h>
 
 #include <aws/io/channel.h>
@@ -440,10 +441,13 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         goto done;
     }
 
+    /* With all the possible event loop hiccups, 60 seconds is still more than enough for completing binding and
+     * listening, successfully or not. */
+    uint64_t timeout_sec = 60;
     /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and listening) is
      * happening asynchronously in the dispatch queue event loop.
      * In case of a failure, the server destruction can be already in progress in the event loop thread. */
-    aws_future_void_wait(setup_future, UINT64_MAX /*timeout*/);
+    aws_future_void_wait(setup_future, timeout_sec * AWS_TIMESTAMP_NANOS);
     int listen_error = aws_future_void_get_error(setup_future);
 
     if (listen_error) {
