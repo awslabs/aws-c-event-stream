@@ -269,11 +269,18 @@ static void s_on_server_listener_setup(struct aws_server_bootstrap *bootstrap, i
         (void *)server,
         aws_error_debug_str(error_code));
 
+    /* Ensure that setup_future will be alive during aws_future_void_set_* call even if a waiter thread releases
+     * setup_future immediately after aws_future_void_wait returns result. Otherwise, aws_future_void_set_* might
+     * use already freed memory. */
+    aws_future_void_acquire(server->setup_future);
+
     if (error_code) {
         aws_future_void_set_error(server->setup_future, error_code);
     } else {
         aws_future_void_set_result(server->setup_future);
     }
+
+    aws_future_void_release(server->setup_future);
 }
 
 /* incoming from a socket on this listener. */
