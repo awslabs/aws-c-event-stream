@@ -23,6 +23,7 @@
 #include <aws/common/clock.h>
 #include <aws/common/hash_table.h>
 
+#include "aws/io/future.h"
 #include <aws/io/channel.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/socket.h>
@@ -464,6 +465,26 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
             aws_error_debug_str(listen_error));
         aws_raise_error(listen_error);
         goto done;
+    }
+
+    if (server->listener->setup_future != NULL) {
+        /* With all the possible event loop hiccups, 60 seconds is still more than enough for completing binding and
+         * listening, successfully or not. */
+        uint64_t timeout_sec = 60;
+        /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and
+         * listening) is happening asynchronously in the dispatch queue event loop. In case of a failure, the server
+         * destruction can be already in progress in the event loop thread. */
+        aws_future_void_wait(server->listener->setup_future, timeout_sec * AWS_TIMESTAMP_NANOS);
+        int listen_error = aws_future_void_get_error(server->listener->setup_future);
+
+        if (listen_error) {
+            AWS_LOGF_ERROR(
+                AWS_LS_EVENT_STREAM_RPC_SERVER,
+                "static: failed to setup new socket listener with error %s",
+                aws_error_debug_str(listen_error));
+            aws_raise_error(listen_error);
+            goto error;
+        }
     }
 
     server->initialized = true;
