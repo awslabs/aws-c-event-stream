@@ -30,6 +30,7 @@ struct test_data {
     struct aws_mutex shutdown_lock;
     struct aws_condition_variable shutdown_cvar;
     bool shutdown_completed;
+    uint16_t server_listener_port;
 };
 
 static struct test_data s_test_data;
@@ -165,6 +166,7 @@ static int s_fixture_setup_shared(
             ASSERT_TRUE(error_code == AWS_IO_SOCKET_ADDRESS_IN_USE || error_code == AWS_ERROR_NO_PERMISSION);
         }
     }
+    test_data->server_listener_port = test_port;
 
     test_data->allocator = allocator;
 
@@ -1898,5 +1900,38 @@ AWS_TEST_CASE_FIXTURE(
     test_event_stream_rpc_server_connection_continuation_max_stream_id_reached,
     s_fixture_setup,
     s_test_event_stream_rpc_server_connection_continuation_max_stream_id_reached,
+    s_fixture_shutdown,
+    &s_test_data)
+
+static int s_test_event_stream_rpc_server_bind_failure(struct aws_allocator *allocator, void *ctx) {
+    struct test_data *test_data = ctx;
+
+    struct aws_socket_options socket_options = {
+        .domain = AWS_SOCKET_IPV4,
+        .type = AWS_SOCKET_STREAM,
+    };
+
+    struct aws_event_stream_rpc_server_listener_options listener_options = {
+        .socket_options = &socket_options,
+        .host_name = "127.0.0.1",
+        .port = test_data->server_listener_port,
+        .bootstrap = test_data->server_bootstrap,
+    };
+
+    struct aws_event_stream_rpc_server_listener *listener =
+        aws_event_stream_rpc_server_new_listener(allocator, &listener_options);
+    ASSERT_NULL(listener);
+    int error_code = aws_last_error();
+    ASSERT_TRUE(error_code == AWS_IO_SOCKET_ADDRESS_IN_USE);
+
+    aws_event_stream_rpc_server_connection_close(test_data->connection, AWS_ERROR_SUCCESS);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    test_event_stream_rpc_server_bind_failure,
+    s_fixture_setup,
+    s_test_event_stream_rpc_server_bind_failure,
     s_fixture_shutdown,
     &s_test_data)
