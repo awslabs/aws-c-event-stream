@@ -439,8 +439,8 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
     server->setup_future = aws_future_void_new(allocator);
     struct aws_future_void *setup_future = server->setup_future;
 
-    server->listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
-    if (!server->listener) {
+    struct aws_socket *listener = aws_server_bootstrap_new_socket_listener(&bootstrap_options);
+    if (!listener) {
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_SERVER,
             "static: failed to allocate new socket listener with error %s",
@@ -452,8 +452,10 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
      * listening, successfully or not. */
     uint64_t timeout_sec = 60;
     /* Handle async nw_socket (Apple Network framework socket) case when the actual work (i.e. binding and listening) is
-     * happening asynchronously in the dispatch queue event loop.
-     * In case of a failure, the server destruction can be already in progress in the event loop thread. */
+     * happening asynchronously in the dispatch queue event loop. In case of a failure, the server destruction can be
+     * already in progress in the event loop thread.
+     * For POSIX sockets the error handling is happening in a synchronous manner.
+     */
     aws_future_void_wait(setup_future, timeout_sec * AWS_TIMESTAMP_NANOS);
     int listen_error = aws_future_void_get_error(setup_future);
 
@@ -466,6 +468,8 @@ struct aws_event_stream_rpc_server_listener *aws_event_stream_rpc_server_new_lis
         goto done;
     }
 
+    /* At this point a listening socket is successfully initialized, so we complete the server initialization. */
+    server->listener = listener;
     server->initialized = true;
     result = server;
 
