@@ -251,9 +251,11 @@ int aws_event_stream_read_headers_from_buffer(
         AWS_RETURN_ERROR_IF(
             aws_byte_cursor_read(&buffer_cur, header.header_name, (size_t)header.header_name_len),
             AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
+        uint8_t value_type_byte;
         AWS_RETURN_ERROR_IF(
-            aws_byte_cursor_read_u8(&buffer_cur, (uint8_t *)&header.header_value_type),
+            aws_byte_cursor_read_u8(&buffer_cur, &value_type_byte),
             AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
+        header.header_value_type = value_type_byte;
 
         switch (header.header_value_type) {
             case AWS_EVENT_STREAM_HEADER_BOOL_FALSE:
