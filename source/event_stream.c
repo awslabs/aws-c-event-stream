@@ -248,9 +248,6 @@ int aws_event_stream_read_headers_from_buffer(
         /* get the header info from the buffer, make sure to increment buffer offset. */
         aws_byte_cursor_read_u8(&buffer_cur, &header.header_name_len);
         AWS_RETURN_ERROR_IF(
-            header.header_name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX,
-            AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
-        AWS_RETURN_ERROR_IF(
             aws_byte_cursor_read(&buffer_cur, header.header_name, (size_t)header.header_name_len),
             AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
         AWS_RETURN_ERROR_IF(
@@ -708,8 +705,6 @@ int aws_event_stream_add_string_header(
     int8_t copy) {
     AWS_FATAL_PRECONDITION(headers);
     AWS_RETURN_ERROR_IF(
-        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
-    AWS_RETURN_ERROR_IF(
         value_len <= AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
     struct aws_event_stream_header_value_pair header = {
         .header_name_len = name_len,
@@ -1034,8 +1029,6 @@ int aws_event_stream_add_bytebuf_header(
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(name);
     AWS_RETURN_ERROR_IF(
-        name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
-    AWS_RETURN_ERROR_IF(
         value_len <= AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
 
     struct aws_event_stream_header_value_pair header = {
@@ -1241,7 +1234,7 @@ static int s_read_header_value_len(
     if (length_portion_read == sizeof(uint16_t)) {
         decoder->current_header.header_value_len = aws_read_u16(decoder->working_buffer);
         AWS_RETURN_ERROR_IF(
-            decoder->current_header.header_value_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX,
+            decoder->current_header.header_value_len <= AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX,
             AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
         decoder->current_header_value_offset = decoder->message_pos;
         decoder->state = s_read_header_value;
@@ -1346,9 +1339,6 @@ static int s_read_header_name_len(
     size_t *processed) {
     (void)len;
     decoder->current_header.header_name_len = *data;
-    AWS_RETURN_ERROR_IF(
-        decoder->current_header.header_name_len <= AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX,
-        AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
     decoder->message_pos++;
     decoder->current_header_name_offset++;
     *processed += 1;
