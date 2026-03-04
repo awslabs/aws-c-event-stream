@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/checksums/crc.h>
 #include <aws/common/array_list.h>
 #include <aws/event-stream/event_stream.h>
 #include <aws/testing/aws_test_harness.h>
@@ -704,3 +705,120 @@ static int s_test_streaming_decoder_incoming_multiple_messages_fn(struct aws_all
 }
 
 AWS_TEST_CASE(test_streaming_decoder_incoming_multiple_messages, s_test_streaming_decoder_incoming_multiple_messages_fn)
+
+static int s_test_streaming_decoder_incoming_application_large_size_header_name_valid_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+
+    /* This test replicates the --trigger case from POC which uses:
+     * - header name length: 255
+     * - header name bytes: 255 (filled with 'A')
+     * - header type: 0x00 (bool true)
+     * This tests the decoder's handling of large header names (255 bytes) */
+
+    uint8_t name_len = 255;
+    size_t name_bytes = 255;
+    uint32_t headers_len = (uint32_t)(1 + name_bytes + 1); /* name_len byte + name + type byte */
+    uint32_t total_len = (uint32_t)(AWS_EVENT_STREAM_PRELUDE_LENGTH + headers_len + AWS_EVENT_STREAM_TRAILER_LENGTH);
+
+    /* Allocate buffer for the message */
+    uint8_t *test_data = aws_mem_acquire(allocator, total_len);
+    memset(test_data, 0, total_len);
+
+    /* Write prelude: total_len (4 bytes) */
+    test_data[0] = (total_len >> 24) & 0xFF;
+    test_data[1] = (total_len >> 16) & 0xFF;
+    test_data[2] = (total_len >> 8) & 0xFF;
+    test_data[3] = total_len & 0xFF;
+
+    /* Write prelude: headers_len (4 bytes) */
+    test_data[4] = (headers_len >> 24) & 0xFF;
+    test_data[5] = (headers_len >> 16) & 0xFF;
+    test_data[6] = (headers_len >> 8) & 0xFF;
+    test_data[7] = headers_len & 0xFF;
+
+    /* Calculate and write prelude CRC */
+    uint32_t prelude_crc = aws_checksums_crc32(test_data, 8, 0);
+    test_data[8] = (prelude_crc >> 24) & 0xFF;
+    test_data[9] = (prelude_crc >> 16) & 0xFF;
+    test_data[10] = (prelude_crc >> 8) & 0xFF;
+    test_data[11] = prelude_crc & 0xFF;
+
+    /* Write header: name_len */
+    test_data[12] = name_len;
+
+    /* Write header: name (filled with 'A') */
+    memset(test_data + 13, 'A', name_bytes);
+
+    /* Write header: type (0x07 = string, but we'll use 0x00 = bool true for simplicity) */
+    test_data[13 + name_bytes] = 0x00;
+
+    /* Calculate and write message CRC */
+    uint32_t message_crc = aws_checksums_crc32(test_data, total_len - 4, 0);
+    size_t crc_offset = total_len - 4;
+    test_data[crc_offset] = (message_crc >> 24) & 0xFF;
+    test_data[crc_offset + 1] = (message_crc >> 16) & 0xFF;
+    test_data[crc_offset + 2] = (message_crc >> 8) & 0xFF;
+    test_data[crc_offset + 3] = message_crc & 0xFF;
+
+    struct test_decoder_data decoder_data = {
+        .latest_payload = 0,
+        .written = 0,
+        .alloc = allocator,
+        .latest_error = 0,
+    };
+    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
+
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
+
+    struct aws_event_stream_streaming_decoder decoder;
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
+
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, total_len);
+
+    ASSERT_SUCCESS(
+        aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should have succeeded");
+    ASSERT_SUCCESS(decoder_data.latest_error, "No Error callback shouldn't have been called");
+
+    ASSERT_INT_EQUALS(total_len, decoder_data.latest_prelude.total_len, "Message length mismatch");
+    ASSERT_INT_EQUALS(headers_len, decoder_data.latest_prelude.headers_len, "Headers length mismatch");
+    ASSERT_INT_EQUALS(prelude_crc, decoder_data.latest_prelude.prelude_crc, "Prelude CRC mismatch");
+
+    /* Verify header was parsed correctly */
+    ASSERT_TRUE(aws_array_list_length(&decoder_data.headers_list) > 0, "Should have at least one header");
+    struct aws_event_stream_header_value_pair latest_header;
+    aws_array_list_get_at(&decoder_data.headers_list, &latest_header, 0);
+    ASSERT_INT_EQUALS(name_len, latest_header.header_name_len, "Header name length should be 255");
+
+    /* Verify all header name bytes are 'A' */
+    for (size_t i = 0; i < name_len; i++) {
+        ASSERT_INT_EQUALS('A', latest_header.header_name[i], "Header name byte should be 'A'");
+    }
+
+    /* Verify header value is bool true */
+    int8_t header_value = aws_event_stream_header_value_as_bool(&latest_header);
+    ASSERT_INT_EQUALS(1, header_value, "Header value should be true");
+
+    ASSERT_UINT_EQUALS(message_crc, decoder_data.message_crc, "Message CRC mismatch");
+
+    if (decoder_data.latest_payload) {
+        aws_mem_release(allocator, decoder_data.latest_payload);
+    }
+
+    aws_event_stream_streaming_decoder_clean_up(&decoder);
+    aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
+    aws_mem_release(allocator, test_data);
+
+    return 0;
+}
+
+AWS_TEST_CASE(
+    test_streaming_decoder_incoming_application_large_size_header_name_valid,
+    s_test_streaming_decoder_incoming_application_large_size_header_name_valid_fn)

@@ -24,12 +24,13 @@ AWS_PUSH_SANE_WARNING_LEVEL
  * This is encoded on the wire in 4 bytes, and could technically be larger (up to INT32_MAX). */
 #define AWS_EVENT_STREAM_MAX_HEADERS_SIZE (AWS_EVENT_STREAM_MAX_MESSAGE_SIZE)
 
-/* Max header name length is 127 bytes.
- * This is encoded on the wire in 1 byte, it cannot change. */
-#define AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX (INT8_MAX)
+/* Max header name length is 255 bytes.
+ * This is encoded on the wire in 1 byte as unsigned int, it cannot change. */
+#define AWS_EVENT_STREAM_HEADER_NAME_LEN_MAX (UINT8_MAX)
 
 /* Max header value length is 32767 bytes.
- * This is encoded on the wire in 2 bytes, it cannot change. */
+ * This is encoded on the wire in 2 bytes as unsigned int, but we followed Java implementation to limit to 32767.
+ * https://github.com/awslabs/aws-eventstream-java/blob/1e76ef478f0108b38e2d7b70b598b4e5f0def3d1/src/main/java/software/amazon/eventstream/Utils.java#L34-L40*/
 #define AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX (INT16_MAX)
 
 enum aws_event_stream_errors {
