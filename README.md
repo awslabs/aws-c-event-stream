@@ -1,6 +1,6 @@
 ## AWS C Event Stream
 
-C99 implementation of the vnd.amazon.event-stream content-type.
+C99 implementation of the vnd.amazon.event-stream content-type. Spec of event-stream https://smithy.io/2.0/aws/amazon-eventstream.html#amazon-event-stream-specification.
 
 ## License
 
