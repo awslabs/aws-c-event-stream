@@ -1257,13 +1257,14 @@ int aws_event_stream_rpc_client_continuation_activate(
     AWS_LOGF_TRACE(AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: activating continuation", (void *)continuation);
     int ret_val = AWS_OP_ERR;
 
+    aws_mutex_lock(&continuation->connection->lock);
+
     if (continuation->stream_id) {
+        aws_mutex_unlock(&continuation->connection->lock);
         AWS_LOGF_ERROR(
             AWS_LS_EVENT_STREAM_RPC_CLIENT, "id=%p: stream has already been activated", (void *)continuation);
         return aws_raise_error(AWS_ERROR_INVALID_STATE);
     }
-
-    aws_mutex_lock(&continuation->connection->lock);
 
     if (continuation->connection->synced_data.is_open &&
         continuation->connection->synced_data.handshake_state == CONNECTION_HANDSHAKE_STATE_CONNECT_ACK_PROCESSED) {
