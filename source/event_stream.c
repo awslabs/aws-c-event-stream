@@ -1517,6 +1517,20 @@ static int s_verify_prelude_state(
             return AWS_OP_ERR;
         }
 
+        if (decoder->prelude.total_len < AWS_EVENT_STREAM_PRELUDE_LENGTH + AWS_EVENT_STREAM_TRAILER_LENGTH) {
+            aws_raise_error(AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
+            char error_message[] = "Message length too short";
+
+            decoder->on_error(
+                decoder,
+                &decoder->prelude,
+                AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH,
+                error_message,
+                decoder->user_context);
+
+            return AWS_OP_ERR;
+        }
+
         /* Should only call on_prelude() after passing crc check and limitation check, otherwise call on_prelude() with
          * incorrect prelude is error prune. */
         decoder->on_prelude(decoder, &decoder->prelude, decoder->user_context);
