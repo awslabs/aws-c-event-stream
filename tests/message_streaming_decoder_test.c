@@ -823,14 +823,6 @@ AWS_TEST_CASE(
     test_streaming_decoder_incoming_application_large_size_header_name_valid,
     s_test_streaming_decoder_incoming_application_large_size_header_name_valid_fn)
 
-//
-
-/*
-00 00 00 14  00 00 00 08  fe 99 66 19   ; prelude, crc=0xFE996619
-00 00  00 00  00 00  00 00              ; 4× {name_len=0, type=BOOL_TRUE}
-00                                      ; +1 byte to keep pump looping
-
- */
 static int s_test_streaming_decoder_incoming_illegal_header_length_relationship_fails_fn(
     struct aws_allocator *allocator,
     void *ctx) {
