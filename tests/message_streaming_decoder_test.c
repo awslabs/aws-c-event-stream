@@ -822,3 +822,56 @@ static int s_test_streaming_decoder_incoming_application_large_size_header_name_
 AWS_TEST_CASE(
     test_streaming_decoder_incoming_application_large_size_header_name_valid,
     s_test_streaming_decoder_incoming_application_large_size_header_name_valid_fn)
+
+//
+
+/*
+00 00 00 14  00 00 00 08  fe 99 66 19   ; prelude, crc=0xFE996619
+00 00  00 00  00 00  00 00              ; 4× {name_len=0, type=BOOL_TRUE}
+00                                      ; +1 byte to keep pump looping
+
+ */
+static int s_test_streaming_decoder_incoming_illegal_header_length_relationship_fails_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    uint8_t test_data[] = {
+        0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x08, 0xfe, 0x99, 0x66,
+        0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+
+    (void)ctx;
+    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
+    aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
+
+    struct aws_event_stream_streaming_decoder_options decoder_options = {
+        .on_payload_segment = s_decoder_test_on_payload_segment,
+        .on_prelude = s_decoder_test_on_prelude_received,
+        .on_header = s_decoder_test_header_received,
+        .on_complete = s_decoder_test_on_complete,
+        .on_error = s_decoder_test_on_error,
+        .user_data = &decoder_data};
+
+    struct aws_event_stream_streaming_decoder decoder;
+    aws_event_stream_streaming_decoder_init_from_options(&decoder, allocator, &decoder_options);
+
+    struct aws_byte_buf test_buf = aws_byte_buf_from_array(test_data, sizeof(test_data));
+    ASSERT_FAILS(aws_event_stream_streaming_decoder_pump(&decoder, &test_buf), "Message validation should not succeed");
+    ASSERT_INT_EQUALS(
+        AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN,
+        decoder_data.latest_error,
+        "Error should be invalid headers length");
+
+    if (decoder_data.latest_payload) {
+        aws_mem_release(allocator, decoder_data.latest_payload);
+    }
+
+    aws_event_stream_streaming_decoder_clean_up(&decoder);
+
+    aws_event_stream_headers_list_cleanup(&decoder_data.headers_list);
+
+    return 0;
+}
+
+AWS_TEST_CASE(
+    test_streaming_decoder_incoming_illegal_header_length_relationship_fails,
+    s_test_streaming_decoder_incoming_illegal_header_length_relationship_fails_fn)
