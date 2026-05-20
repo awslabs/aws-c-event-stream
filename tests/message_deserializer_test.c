@@ -169,6 +169,8 @@ static int s_test_read_message_headers_too_many_fn(struct aws_allocator *allocat
 
     struct aws_byte_buf header_buffer;
     aws_byte_buf_init(&header_buffer, allocator, TOO_MANY_HEADERS_BUFFER_SIZE);
+
+    // Each [0, 0] pair is a boolean header with no name and value == true
     aws_secure_zero(header_buffer.buffer, TOO_MANY_HEADERS_BUFFER_SIZE);
 
     struct aws_array_list headers;
@@ -179,6 +181,7 @@ static int s_test_read_message_headers_too_many_fn(struct aws_allocator *allocat
     int last_error = aws_last_error();
     ASSERT_FAILS(result);
     ASSERT_INT_EQUALS(AWS_ERROR_EVENT_STREAM_MESSAGE_TOO_MANY_HEADERS, last_error);
+    ASSERT_TRUE(aws_array_list_length(&headers) <= AWS_EVENT_STREAM_MESSAGE_MAX_HEADERS);
 
     aws_array_list_clean_up(&headers);
     aws_byte_buf_clean_up(&header_buffer);
