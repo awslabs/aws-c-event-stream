@@ -886,7 +886,12 @@ static int s_test_streaming_decoder_incoming_message_too_short_fn(struct aws_all
     };
 
     (void)ctx;
-    struct test_decoder_data decoder_data = {.latest_payload = 0, .written = 0, .alloc = allocator, .latest_error = 0};
+    struct test_decoder_data decoder_data = {
+        .latest_payload = 0,
+        .written = 0,
+        .alloc = allocator,
+        .latest_error = 0,
+    };
     aws_event_stream_headers_list_init(&decoder_data.headers_list, allocator);
 
     struct aws_event_stream_streaming_decoder_options decoder_options = {
