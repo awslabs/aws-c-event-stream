@@ -33,6 +33,12 @@ AWS_PUSH_SANE_WARNING_LEVEL
  * https://github.com/awslabs/aws-eventstream-java/blob/1e76ef478f0108b38e2d7b70b598b4e5f0def3d1/src/main/java/software/amazon/eventstream/Utils.java#L34-L40*/
 #define AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX (INT16_MAX)
 
+/*
+ * Not an actual part of the eventstream spec.  Similar to HTTP where there is no spec-defined header maximum but
+ * implementations apply limits to bound memory usage.
+ */
+#define AWS_EVENT_STREAM_MESSAGE_MAX_HEADERS 1024
+
 enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_EVENT_STREAM_PACKAGE_ID),
     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN,
@@ -46,6 +52,7 @@ enum aws_event_stream_errors {
     AWS_ERROR_EVENT_STREAM_RPC_PROTOCOL_ERROR,
     AWS_ERROR_EVENT_STREAM_RPC_STREAM_CLOSED,
     AWS_ERROR_EVENT_STREAM_RPC_STREAM_NOT_ACTIVATED,
+    AWS_ERROR_EVENT_STREAM_MESSAGE_TOO_MANY_HEADERS,
 
     AWS_ERROR_EVENT_STREAM_END_RANGE = AWS_ERROR_ENUM_END_RANGE(AWS_C_EVENT_STREAM_PACKAGE_ID),
 };

@@ -61,6 +61,10 @@ static struct aws_error_info s_errors[] = {
         "aws_event_stream_rpc_client_continuation_activate()"
         " before using a stream continuation token.",
         LIB_NAME),
+    AWS_DEFINE_ERROR_INFO(
+        AWS_ERROR_EVENT_STREAM_MESSAGE_TOO_MANY_HEADERS,
+        "message contained too many headers",
+        LIB_NAME),
 };
 
 static struct aws_error_info_list s_list = {
@@ -239,11 +243,16 @@ int aws_event_stream_read_headers_from_buffer(
         return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
     }
 
+    size_t header_count = 0;
     struct aws_byte_cursor buffer_cur = aws_byte_cursor_from_array(buffer, headers_len);
     /* iterate the buffer per header. */
     while (buffer_cur.len) {
         struct aws_event_stream_header_value_pair header;
         AWS_ZERO_STRUCT(header);
+
+        if (header_count >= AWS_EVENT_STREAM_MESSAGE_MAX_HEADERS) {
+            return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_TOO_MANY_HEADERS);
+        }
 
         /* get the header info from the buffer, make sure to increment buffer offset. */
         aws_byte_cursor_read_u8(&buffer_cur, &header.header_name_len);
@@ -311,6 +320,8 @@ int aws_event_stream_read_headers_from_buffer(
         if (aws_array_list_push_back(headers, (const void *)&header)) {
             return AWS_OP_ERR;
         }
+
+        ++header_count;
     }
 
     return AWS_OP_SUCCESS;

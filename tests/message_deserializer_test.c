@@ -160,3 +160,30 @@ static int s_test_outgoing_application_one_compressed_header_pair_valid_fn(struc
 AWS_TEST_CASE(
     test_outgoing_application_one_compressed_header_pair_valid,
     s_test_outgoing_application_one_compressed_header_pair_valid_fn)
+
+static const size_t TOO_MANY_HEADERS_BUFFER_SIZE = 1024 * 1024 - 16;
+
+static int s_test_read_message_headers_too_many_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
+    (void)ctx;
+
+    struct aws_byte_buf header_buffer;
+    aws_byte_buf_init(&header_buffer, allocator, TOO_MANY_HEADERS_BUFFER_SIZE);
+    aws_secure_zero(header_buffer.buffer, TOO_MANY_HEADERS_BUFFER_SIZE);
+
+    struct aws_array_list headers;
+    aws_array_list_init_dynamic(&headers, allocator, 8, sizeof(struct aws_event_stream_header_value_pair));
+
+    int result =
+        aws_event_stream_read_headers_from_buffer(&headers, header_buffer.buffer, TOO_MANY_HEADERS_BUFFER_SIZE);
+    int last_error = aws_last_error();
+    ASSERT_FAILS(result);
+    ASSERT_INT_EQUALS(AWS_ERROR_EVENT_STREAM_MESSAGE_TOO_MANY_HEADERS, last_error);
+
+    aws_array_list_clean_up(&headers);
+    aws_byte_buf_clean_up(&header_buffer);
+
+    return 0;
+}
+
+AWS_TEST_CASE(test_read_message_headers_too_many, s_test_read_message_headers_too_many_fn)
