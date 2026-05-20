@@ -111,6 +111,7 @@ static int s_process_read_message(
                 "id=%p: read total message length of %" PRIu32,
                 (void *)handler,
                 event_stream_handler->current_message_len);
+
             if (event_stream_handler->current_message_len > AWS_EVENT_STREAM_MAX_MESSAGE_SIZE) {
                 AWS_LOGF_ERROR(
                     AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
@@ -119,6 +120,19 @@ static int s_process_read_message(
                     event_stream_handler->current_message_len,
                     (size_t)AWS_EVENT_STREAM_MAX_MESSAGE_SIZE);
                 aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_FIELD_SIZE_EXCEEDED);
+                error_code = aws_last_error();
+                goto finished;
+            }
+
+            if (event_stream_handler->current_message_len <
+                AWS_EVENT_STREAM_PRELUDE_LENGTH + AWS_EVENT_STREAM_TRAILER_LENGTH) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_EVENT_STREAM_CHANNEL_HANDLER,
+                    "id=%p: message length of %" PRIu32 " is invalid and too small",
+                    (void *)handler,
+                    event_stream_handler->current_message_len);
+                // not a great error but matches streaming which in turn matches original whole message decode
+                aws_raise_error(AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH);
                 error_code = aws_last_error();
                 goto finished;
             }
