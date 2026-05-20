@@ -503,3 +503,44 @@ AWS_TEST_CASE_FIXTURE(
     s_test_channel_handler_write_message,
     s_fixture_shutdown,
     &s_test_data)
+
+static int s_test_channel_handler_short_message_fails(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
+    struct test_data *test_data = ctx;
+
+    struct single_message_test_data message_test_data;
+    AWS_ZERO_STRUCT(message_test_data);
+
+    test_data->received_fn = s_test_on_single_message;
+    test_data->user_data = &message_test_data;
+
+    /* altered the 9th byte to a single bit flip */
+    uint8_t short_message[] = {
+        0x00,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0xad,
+        0xc2,
+        0x50,
+        0x19,
+        0x00,
+    };
+
+    struct aws_byte_cursor empty_message_cursor = aws_byte_cursor_from_array(short_message, sizeof(short_message));
+    ASSERT_SUCCESS(testing_channel_push_read_data(&s_test_data.testing_channel, empty_message_cursor));
+    ASSERT_UINT_EQUALS(AWS_ERROR_EVENT_STREAM_BUFFER_LENGTH_MISMATCH, message_test_data.last_error_code);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    test_channel_handler_short_message_fails,
+    s_fixture_setup,
+    s_test_channel_handler_short_message_fails,
+    s_fixture_shutdown,
+    &s_test_data)
