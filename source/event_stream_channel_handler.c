@@ -90,7 +90,7 @@ static int s_process_read_message(
         }
 
         /* we need to get the prelude so we can get the message length to know how much to read and also
-         * to check the prelude CRC to protect against bit-flips causing us to read to much memory */
+         * to check the prelude CRC to protect against bit-flips causing us to read too much memory */
         if (event_stream_handler->message_buf.len == AWS_EVENT_STREAM_PRELUDE_LENGTH) {
             AWS_LOGF_TRACE(AWS_LS_EVENT_STREAM_CHANNEL_HANDLER, "id=%p: processing prelude buffer", (void *)handler);
 

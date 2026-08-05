@@ -598,7 +598,7 @@ static struct event_stream_connection_send_message_args *s_event_stream_connecti
     aws_array_list_init_dynamic(
         &headers_list, connection->allocator, headers_count, sizeof(struct aws_event_stream_header_value_pair));
 
-    /* since we preallocated the space for the headers, these can't fail, but we'll go ahead an assert on them just in
+    /* since we preallocated the space for the headers, these can't fail, but we'll go ahead and assert on them just in
      * case */
     for (size_t i = 0; i < message_args->headers_count; ++i) {
         AWS_FATAL_ASSERT(!aws_array_list_push_back(&headers_list, &message_args->headers[i]));

@@ -1543,7 +1543,7 @@ static int s_verify_prelude_state(
         }
 
         /* Should only call on_prelude() after passing crc check and limitation check, otherwise call on_prelude() with
-         * incorrect prelude is error prune. */
+         * incorrect prelude is error prone. */
         decoder->on_prelude(decoder, &decoder->prelude, decoder->user_context);
 
         decoder->running_crc = aws_checksums_crc32(
@@ -1625,7 +1625,6 @@ void aws_event_stream_streaming_decoder_init_from_options(
     AWS_ASSERT(options->on_error);
     AWS_ASSERT(options->on_header);
     AWS_ASSERT(options->on_payload_segment);
-    AWS_ASSERT(options->on_prelude);
     AWS_ASSERT(options->on_prelude);
 
     s_reset_state(decoder);

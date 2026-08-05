@@ -37,7 +37,7 @@
 #endif
 
 static const struct aws_byte_cursor s_missing_operation_name_error = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(
-    "{ \"message\": \"The first message for on a non-zero :stream-id must contain an operation header value.\"; }");
+    "{ \"message\": \"The first message on a non-zero :stream-id must contain an operation header value.\" }");
 
 struct aws_event_stream_rpc_server_listener {
     struct aws_allocator *allocator;
@@ -83,7 +83,7 @@ struct aws_event_stream_rpc_server_continuation_token {
 /** This is the destructor callback invoked by the connections continuation table when a continuation is removed
  * from the hash table.
  */
-void s_continuation_destroy(void *value) {
+static void s_continuation_destroy(void *value) {
     struct aws_event_stream_rpc_server_continuation_token *continuation = value;
     AWS_LOGF_DEBUG(AWS_LS_EVENT_STREAM_RPC_SERVER, "id=%p: destroying continuation", (void *)continuation);
 
@@ -307,6 +307,7 @@ static void s_on_accept_channel_setup(
             int error = aws_last_error();
             server->on_new_connection(NULL, error, NULL, server->user_data);
             aws_channel_shutdown(channel, error);
+            return;
         }
 
         struct aws_event_stream_rpc_connection_options connection_options;
@@ -669,7 +670,7 @@ static int s_send_protocol_message(
         goto args_allocated_before_failure;
     }
 
-    /* since we preallocated the space for the headers, these can't fail, but we'll go ahead an assert on them just in
+    /* since we preallocated the space for the headers, these can't fail, but we'll go ahead and assert on them just in
      * case */
     for (size_t i = 0; i < message_args->headers_count; ++i) {
         AWS_FATAL_ASSERT(!aws_array_list_push_back(&headers_list, &message_args->headers[i]));
