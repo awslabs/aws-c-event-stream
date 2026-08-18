@@ -51,6 +51,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<INSTALL_INTERFACE:include>)
 
 
+# TODO: switch to VERSION derived from the VERSION file (via aws_get_version) once SOVERSION is set explicitly, to avoid changing the SONAME.
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 
 aws_use_package(aws-c-io)
