@@ -1,8 +1,23 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0.
 cmake_minimum_required(VERSION 3.9...3.31)
-project (aws-c-event-stream C)
+# In-source builds inherit aws-c-common's module path from the parent. Standalone
+# builds must locate the installed modules here: find_package needs an enabled
+# language, so it cannot run until after project().
+if (NOT IN_SOURCE_BUILD)
+    find_file(AWS_GET_VERSION_MODULE AwsGetVersion.cmake
+            PATH_SUFFIXES lib/cmake/aws-c-common/modules lib64/cmake/aws-c-common/modules)
+    if (NOT AWS_GET_VERSION_MODULE)
+        message(FATAL_ERROR "Could not find AwsGetVersion.cmake from an installed aws-c-common. Set CMAKE_PREFIX_PATH to the aws-c-common install prefix.")
+    endif()
+    get_filename_component(AWS_COMMON_MODULE_DIR "${AWS_GET_VERSION_MODULE}" DIRECTORY)
+    list(APPEND CMAKE_MODULE_PATH "${AWS_COMMON_MODULE_DIR}")
+endif()
 
+include(AwsGetVersion)
+aws_get_version(AWS_C_EVENT_STREAM_VERSION AWS_C_EVENT_STREAM_SOVERSION)
+
+project(aws-c-event-stream LANGUAGES C VERSION ${AWS_C_EVENT_STREAM_VERSION})
 if (NOT IN_SOURCE_BUILD)
     # this is required so we can use aws-c-common's CMake modules
     find_package(aws-c-common REQUIRED)
@@ -51,8 +66,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<INSTALL_INTERFACE:include>)
 
 
-# TODO: switch to VERSION derived from the VERSION file (via aws_get_version) once SOVERSION is set explicitly, to avoid changing the SONAME.
-set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
+set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${AWS_C_EVENT_STREAM_VERSION})
+set_target_properties(${PROJECT_NAME} PROPERTIES SOVERSION ${AWS_C_EVENT_STREAM_SOVERSION})
 
 aws_use_package(aws-c-io)
 aws_use_package(aws-c-common)
