@@ -160,6 +160,56 @@ uint32_t aws_event_stream_compute_headers_required_buffer_len(const struct aws_a
     return (uint32_t)headers_len;
 }
 
+/*
+ * Validates a header's type and value length against the limits of the wire format.
+ * The header struct is public and callers may fill it in directly (e.g. RPC message_args.headers or
+ * aws_event_stream_add_header()), so it must be checked before it is encoded.
+ *
+ * Note: header_value_len is a uint16_t. A caller that narrows a longer length into it has already lost the
+ * real length, and that truncation cannot be detected here. Callers must check against
+ * AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX before narrowing, or use the *_by_cursor APIs.
+ */
+static int s_validate_header(const struct aws_event_stream_header_value_pair *header) {
+    switch (header->header_value_type) {
+        case AWS_EVENT_STREAM_HEADER_BOOL_FALSE:
+        case AWS_EVENT_STREAM_HEADER_BOOL_TRUE:
+            /* no value bytes are encoded for bools, header_value_len is ignored. */
+            return AWS_OP_SUCCESS;
+        case AWS_EVENT_STREAM_HEADER_BYTE:
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len == sizeof(uint8_t), AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+            return AWS_OP_SUCCESS;
+        case AWS_EVENT_STREAM_HEADER_INT16:
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len == sizeof(uint16_t), AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+            return AWS_OP_SUCCESS;
+        case AWS_EVENT_STREAM_HEADER_INT32:
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len == sizeof(uint32_t), AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+            return AWS_OP_SUCCESS;
+        case AWS_EVENT_STREAM_HEADER_INT64:
+        case AWS_EVENT_STREAM_HEADER_TIMESTAMP:
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len == sizeof(uint64_t), AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+            return AWS_OP_SUCCESS;
+        case AWS_EVENT_STREAM_HEADER_UUID:
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len == UUID_LEN, AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+            return AWS_OP_SUCCESS;
+        case AWS_EVENT_STREAM_HEADER_BYTE_BUF:
+        case AWS_EVENT_STREAM_HEADER_STRING:
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len <= AWS_EVENT_STREAM_HEADER_VALUE_LEN_MAX,
+                AWS_ERROR_EVENT_STREAM_MESSAGE_INVALID_HEADERS_LEN);
+            AWS_RETURN_ERROR_IF(
+                header->header_value_len == 0 || header->header_value.variable_len_val != NULL,
+                AWS_ERROR_INVALID_ARGUMENT);
+            return AWS_OP_SUCCESS;
+        default:
+            return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE);
+    }
+}
+
 int aws_event_stream_write_headers_to_buffer_safe(const struct aws_array_list *headers, struct aws_byte_buf *buf) {
     AWS_FATAL_PRECONDITION(buf);
 
@@ -173,6 +223,9 @@ int aws_event_stream_write_headers_to_buffer_safe(const struct aws_array_list *h
         struct aws_event_stream_header_value_pair *header = NULL;
 
         aws_array_list_get_at_ptr(headers, (void **)&header, i);
+        if (s_validate_header(header)) {
+            return AWS_OP_ERR;
+        }
         AWS_RETURN_ERROR_IF(
             aws_byte_buf_write_u8(buf, header->header_name_len), AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN);
         AWS_RETURN_ERROR_IF(
@@ -207,8 +260,8 @@ int aws_event_stream_write_headers_to_buffer_safe(const struct aws_array_list *h
                     AWS_ERROR_EVENT_STREAM_INSUFFICIENT_BUFFER_LEN);
                 break;
             default:
-                AWS_FATAL_ASSERT(false && !"Unknown header type!");
-                break;
+                /* unreachable, s_validate_header() rejects unknown types. */
+                return aws_raise_error(AWS_ERROR_EVENT_STREAM_MESSAGE_UNKNOWN_HEADER_TYPE);
         }
     }
 
@@ -1058,6 +1111,10 @@ int aws_event_stream_add_header(
     AWS_FATAL_PRECONDITION(headers);
     AWS_FATAL_PRECONDITION(header);
 
+    if (s_validate_header(header)) {
+        return AWS_OP_ERR;
+    }
+
     struct aws_event_stream_header_value_pair header_copy = *header;
 
     if (header->header_value_type == AWS_EVENT_STREAM_HEADER_STRING ||
@@ -1072,6 +1129,8 @@ int aws_event_stream_add_header(
             1); /* Copy the header value */
     }
 
+    /* fixed-size values live in static_val, nothing for headers_list_cleanup() to free. */
+    header_copy.value_owned = 0;
     return aws_array_list_push_back(headers, (void *)&header_copy);
 }
 
